@@ -1,8 +1,14 @@
 import asyncfl as AFL
 import numpy as np
-
+import torch
 
 if __name__ == '__main__':
+
+    # print('Checking torch for CUDA')
+    # print(torch.cuda.is_available())
+    # print(torch.cuda.current_device())
+    # print(torch.cuda.get_device_name(0))
+    # exit()
     print('Running test')
     # s = AFL.Server('mnist')
     # s.create_clients(2)

@@ -14,7 +14,9 @@ class Server:
         self.clients = []
         self.dataset_name = dataset
         self.train_set, self.test_set = afl_dataset(self.dataset_name, use_iter=False)
-        self.device = torch.device('cpu')
+        # if torch.cuda.is_available()
+        self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
+        # self.device = torch.device('cpu')
         self.network = MNIST_CNN().to(self.device)
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01)
 
@@ -48,11 +50,12 @@ class Server:
             if g is not None:
                 try:
                     # grad = torch.from_numpy(np.array(g, dtype=np.float16))
-                    p.grad = torch.from_numpy(g)
+                    p.grad = torch.from_numpy(g).to(self.device)
                 except Exception as e:
                     print('Exception')
                     print(g)
                     raise e
+        # self.network.to(self.device)
 
     def aggregate(self, client_gradients, client_id):
         """Merges the new gradients and assigns them to their relevant parameter
@@ -63,13 +66,12 @@ class Server:
             if g is not None:
                 try:
                     # p.grad = torch.from_numpy(np.array(g, dtype=np.float16))
-                    p.grad = torch.from_numpy(g)
+                    p.grad = torch.from_numpy(g).to(self.device)
                     # p.grad = g
                 except Exception as e:
                     print('Exception')
                     print(g)
                     raise e
-
         self.optimizer.step()
         # for g in client_gradients:
         #     g_flat = torch.zeros_like(g)
@@ -85,6 +87,7 @@ class Server:
 
         with torch.no_grad():
             for batch_idx, (data, target) in enumerate(self.test_set):
+                data, target = data.to(self.device), target.to(self.device)
                 # This is only set to finish evaluation faster.
                 # if batch_idx * len(data) > 1024:
                 #     break

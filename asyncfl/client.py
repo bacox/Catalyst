@@ -12,7 +12,8 @@ class Client:
         self.pid = pid
         self.dataset_name = dataset_name
         self.train_set, self.test_set = afl_dataset(dataset_name)
-        self.device = torch.device('cpu')
+        # self.device = torch.device('cpu')
+        self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = MNIST_CNN().to(self.device)
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01, momentum=0.5)
@@ -42,6 +43,8 @@ class Client:
             # Reload data
             self.train_set, self.test_set = afl_dataset(self.dataset_name)
             inputs, labels = next(self.train_set)
+
+        inputs, labels = inputs.to(self.device), labels.to(self.device)
         # zero the parameter gradients
         self.optimizer.zero_grad()
         outputs = self.network(inputs)
