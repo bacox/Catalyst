@@ -3,3 +3,7 @@ pandas
 matplotlib
 seaborn
 tqdm
+torch
+torchvision
+prettyprint
+graphviz
