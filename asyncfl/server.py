@@ -3,13 +3,14 @@ import torch
 
 from .dataloader import afl_dataset
 from .client import Client
-from .network import MNIST_CNN, model_gradients
+from .network import MNIST_CNN, model_gradients, flatten, unflatten_g
 
 
 class Server:
 
 
     def __init__(self, dataset) -> None:
+        self.g_flat = None
         print('Hello server')
         self.clients = []
         self.dataset_name = dataset
@@ -19,6 +20,9 @@ class Server:
         # self.device = torch.device('cpu')
         self.network = MNIST_CNN().to(self.device)
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01)
+        self.w_flat = flatten(self.network)
+
+
 
 
     def get_model_weights(self):
@@ -38,7 +42,11 @@ class Server:
         client.set_weights(self.get_model_weights())
 
     def client_update(self, client: Client):
+        # w_flat = flatten(self.network)
+        self.g_flat = torch.zeros_like(self.w_flat)
         client_gradients = client.get_gradients()
+        client_gradients = torch.from_numpy(client_gradients)
+        unflatten_g(self.network, client_gradients)
         # print(f'Received update from {type(client)} with PID: {client.get_pid()}')
         self.aggregate(client_gradients, client.get_pid())
         current_model_weights = self.get_model_weights()

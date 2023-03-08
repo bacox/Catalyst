@@ -7,3 +7,16 @@ With some extensions, this should be able to run as a simulation on a GPU.
 Run `exp.ipynb` for results
 
 Author: Bart Cox 13-02-2023
+
+
+### Dev notes
+
+*Using gradients vs model weights*
+In async learning, gradients are often used when updating the central server.
+This works straightforward for single batch updates. 
+For multi batch updates, the gradients needs to be accumulated during training.
+
+Using weights is much easier to implement. You do not have to think about the length of training (number of local batches).
+You just create a new model out of client weights.
+
+@TODO: Make sure all data is sent using a flattened vector.

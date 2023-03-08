@@ -141,7 +141,7 @@ class Scheduler:
             client = clients[client_id]
             client.train()
             server.client_update(client)
-            if update_id % 100 == 0:
+            if update_id % 10 == 0:
                 # print('Check accuracy')
                 out = server.evaluate_accuracy()
                 # print(out)

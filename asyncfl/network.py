@@ -15,8 +15,42 @@ def model_gradients(model: nn.Module) -> List[Any]:
     grads = []
     for p in model.parameters():
         grad = None if p.grad is None else p.grad.data.cpu().numpy()
+        # grad = None if p.grad is None else p.grad.data.cpu()
         grads.append(grad)
+    # return torch.concat(grads)
     return grads
+
+
+def flatten(model):
+    vec = []
+    for param in model.parameters():
+        vec.append(param.data.view(-1))
+    return torch.cat(vec)
+
+
+def unflatten(model, vec):
+    pointer = 0
+    for param in model.parameters():
+        num_param = torch.prod(torch.LongTensor(list(param.size())))
+        param.data = vec[pointer:pointer + num_param].view(param.size())
+        pointer += num_param
+
+
+def flatten_g(model, vec):
+    pointer = 0
+    for param in model.parameters():
+        num_param = torch.prod(torch.LongTensor(list(param.size())))
+        vec[pointer:pointer + num_param] = param.grad.data.view(-1)
+        pointer += num_param
+
+
+def unflatten_g(model, vec):
+    pointer = 0
+    for param in model.parameters():
+        num_param = torch.prod(torch.LongTensor(list(param.size())))
+        param.grad.data = vec[pointer:pointer + num_param].view(param.size())
+        pointer += num_param
+
 
 class LeNet(nn.Module):
     """Convulational Neural Network used for testing and development"""

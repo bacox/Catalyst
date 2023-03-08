@@ -3,7 +3,7 @@ import copy
 import torch
 
 from .dataloader import afl_dataset
-from .network import MNIST_CNN, model_gradients
+from .network import MNIST_CNN, model_gradients, flatten, flatten_g
 
 
 class Client:
@@ -17,6 +17,8 @@ class Client:
         self.network = MNIST_CNN().to(self.device)
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01, momentum=0.5)
+        self.w_flat = flatten(self.network)
+        self.g_flat = torch.zeros_like(self.w_flat)
 
     def get_pid(self):
         # print(f'My PID is: {self.pid}')
@@ -33,10 +35,28 @@ class Client:
         return self.network.state_dict().copy()
 
     def get_gradients(self):
-        return model_gradients(self.network)
+        # return model_gradients(self.network)
+        return self.g_flat.data.cpu().numpy()
 
+
+    # def train(self):
+    #     self.w_flat = flatten(self.network)
+    #     self.g_flat = torch.zeros_like(self.w_flat)
+    #     self.optimizer.zero_grad()
+    #     for batch_idx, (inputs, labels) in enumerate(self.train_set):
+    #         inputs, labels = inputs.to(self.device), labels.to(self.device)
+    #         self.optimizer.zero_grad()
+    #         outputs = self.network(inputs)
+    #         loss = self.loss_function(outputs, labels)
+    #         loss.backward()
+    #         flatten_g(self.network, self.g_flat)
+    #         self.g_flat.add_(self.w_flat)
+    #         # print(self.g_flat)
+    #         self.optimizer.step()
 
     def train(self):
+        self.w_flat = flatten(self.network)
+        self.g_flat = torch.zeros_like(self.w_flat)
         try:
             inputs, labels = next(self.train_set)
         except StopIteration as _si:
@@ -50,6 +70,8 @@ class Client:
         outputs = self.network(inputs)
         loss = self.loss_function(outputs, labels)
         loss.backward()
+        flatten_g(self.network, self.g_flat)
+        self.g_flat.add_(self.w_flat)
         self.optimizer.step()
 
         # print('Finished training')

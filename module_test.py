@@ -19,8 +19,8 @@ if __name__ == '__main__':
     server_args = {}
     # client_args = {'magnitude': -1.0}
     client_args = {'magnitude': 1.0}
-    n = 30
-    f = 3
+    n = 4
+    f = 0
     # f = 0
     config = {
         'clients': {
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         # 'server': AFL.Server,
         'server': AFL.BASGD,
         'server_args': {
-            'num_buffers': 10
+            'num_buffers': 2
         },
         'dataset_name': 'mnist'
     }

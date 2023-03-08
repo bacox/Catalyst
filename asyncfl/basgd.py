@@ -118,9 +118,10 @@ class BASGD(Server):
                 out = []
 
                 for idx, x in enumerate(gradients[0]):
-                    out.append(np.mean([x[idx] for x in gradients], axis=0))
+                    out.append([np.mean(x[idx], axis=0) for x in gradients])
                 return out
-            avg_grad = avg_gradients(buffer_gradients)
+            # avg_grad = avg_gradients(buffer_gradients)
+            avg_grad = np.mean(buffer_gradients, axis=0)
             # avg_grad = [x for x in np.mean(buffer_gradients, axis=0)]
 
             # def avg_grads(gradients):
@@ -138,6 +139,7 @@ class BASGD(Server):
             # print(f'Dim buffer_gradients={buffer_gradients.shape}')
             # print(buffer_gradients)
             # avg_grad = self.buffers.get_all_gradients()
+            model_grads = unflatten
             self.set_gradients(avg_grad)
             # self.grad_history[self.model.version] = [g.copy() for g in self.model.get_gradients()]
             # self.prev_weights = {key: value.detach().clone() for key, value in self.model.get_weights().items()}
