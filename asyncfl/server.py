@@ -85,6 +85,8 @@ class Server:
         #     g_flat = torch.zeros_like(g)
         #     u_flat = torch.zeros_like(g)
         # print('Aggregating')
+    # def init_network(self):
+
 
     def evaluate_accuracy(self):
         # print('Testing')
