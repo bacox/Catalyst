@@ -17,9 +17,9 @@ if __name__ == '__main__':
 
     # server_args = {'num_buffers': 2}
     server_args = {}
-    # client_args = {'magnitude': -1.0}
-    client_args = {'magnitude': 1.0}
-    n = 4
+    client_args = {'magnitude': -1.0}
+    # client_args = {'magnitude': 1.0}
+    n = 3
     f = 0
     # f = 0
     config = {
@@ -31,17 +31,17 @@ if __name__ == '__main__':
             'n': n,
             'f': f,
             'f_type': AFL.NGClient,
-            'f_args': {'magnitude': 10},
+            'f_args': {'magnitude': -1},
             'f_ct': [1] * f
         },
-        # 'server': AFL.Server,
-        'server': AFL.BASGD,
+        'server': AFL.Server,
+        # 'server': AFL.BASGD,
         'server_args': {
-            'num_buffers': 2
+            # 'num_buffers': 2
         },
         'dataset_name': 'mnist'
     }
-
+    print(config)
     # client_args = {}
     sched = AFL.Scheduler(**config)
     # sched = AFL.Scheduler(AFL.Server, AFL.NGClient, 4, 'mnist', server_args=server_args, client_args=client_args)

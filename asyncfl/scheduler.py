@@ -6,7 +6,6 @@ from . import Server
 from .client import Client
 from .task import Task
 
-
 class Scheduler:
 
     def __init__(self, dataset_name: str, **config):
@@ -139,9 +138,9 @@ class Scheduler:
         for update_id, client_id in enumerate(interaction_sequence):
             # print(f'Training client {client_id}')
             client = clients[client_id]
-            client.train()
+            client.train(num_batches=1)
             server.client_update(client)
-            if update_id % 10 == 0:
+            if update_id % 20 == 0:
                 # print('Check accuracy')
                 out = server.evaluate_accuracy()
                 # print(out)

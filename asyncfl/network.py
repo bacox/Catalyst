@@ -44,12 +44,13 @@ def flatten_g(model, vec):
         pointer += num_param
 
 
-def unflatten_g(model, vec):
+def unflatten_g(model, vec, device:torch.device):
     pointer = 0
     for param in model.parameters():
         num_param = torch.prod(torch.LongTensor(list(param.size())))
         grad = torch.unflatten(vec[pointer:pointer + num_param], 0, param.size())
-        param.grad = grad.clone()
+
+        param.grad = grad.clone().to(device)
         # param.grad.data = vec[pointer:pointer + num_param].view(param.size())
         pointer += num_param
 

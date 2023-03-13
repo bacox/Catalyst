@@ -26,13 +26,14 @@ def get_sampler(dataset, n_clients=1, rank=0, seed=-1, shuffle=True) -> SubsetRa
     if shuffle:
         np.random.shuffle(indices)
     client_indices = indices[rank:dataset_size:n_clients]
+    print(f'Sampler for client {rank}')
     return SubsetRandomSampler(client_indices)
 
 
 def load_data(data_root: str, train_batch_size: int,
               test_batch_size: int,
               client_id: int,
-              n_clients: int, seed= -1, use_iter=True) -> Tuple[Iterator[Any], Iterator[Any]]:
+              n_clients: int, seed= -1, use_iter=True) -> Tuple[DataLoader[Any], DataLoader[Any]]:
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )

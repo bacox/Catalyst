@@ -46,7 +46,7 @@ class Server:
         self.g_flat = torch.zeros_like(self.w_flat)
         client_gradients = client.get_gradients()
         client_gradients = torch.from_numpy(client_gradients)
-        unflatten_g(self.network, client_gradients)
+        unflatten_g(self.network, client_gradients, self.device)
         # print(f'Received update from {type(client)} with PID: {client.get_pid()}')
         self.aggregate(client_gradients, client.get_pid())
         current_model_weights = self.get_model_weights()
@@ -69,17 +69,24 @@ class Server:
         """Merges the new gradients and assigns them to their relevant parameter
         Uses the optimizer update the model based on the gradients
         @TODO: Want to replace this with a manual aggregation step
+
+
+        How to rewrite this?
+        Input will be a flat numpy vector?
         """
-        for g, p in zip(client_gradients, self.network.parameters()):
-            if g is not None:
-                try:
-                    # p.grad = torch.from_numpy(np.array(g, dtype=np.float16))
-                    p.grad = torch.from_numpy(g).to(self.device)
-                    # p.grad = g
-                except Exception as e:
-                    print('Exception')
-                    print(g)
-                    raise e
+        unflatten_g(self.network, client_gradients, self.device)
+        # print(client_gradients)
+        # for g, p in zip(client_gradients, self.network.parameters()):
+        #     if g is not None:
+        #         try:
+        #             # p.grad = torch.from_numpy(np.array(g, dtype=np.float16))
+        #             # p.grad = torch.from_numpy(g).to(self.device)
+        #             p.grad = g.to(self.device)
+        #             # p.grad = g
+        #         except Exception as e:
+        #             print('Exception')
+        #             print(g)
+        #             raise e
         self.optimizer.step()
         # for g in client_gradients:
         #     g_flat = torch.zeros_like(g)

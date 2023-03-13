@@ -4,6 +4,7 @@ import copy
 import numpy as np
 import torch
 from asyncfl import Server
+from asyncfl.network import unflatten_g
 
 
 class Buffer:
@@ -17,8 +18,14 @@ class Buffer:
         if self.N:
             # tmp_N = ((self.N - 1) / self.N)
             # print(type(((self.N - 1) / self.N)))
+
+
             for idx, (avg_g, g) in enumerate(zip(self.avg_gradient, gradient)):
-                self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.copy()
+                # Numpy version
+                # self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.copy()
+                # Torch version
+                self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.clone()
+
             #     self.avg_gradient[idx] = ((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*g.copy()
             # self.avg_gradient = [((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*g.copy() for g in gradient]
             # self.avg_gradient =  (1/self.N)*gradient
@@ -33,6 +40,35 @@ class Buffer:
 
     def __len__(self):
         return self.N
+
+class BufferSet_G:
+
+    def __init__(self, B):
+        self.buffers = []
+        self.B = B
+
+        for _b in range(B):
+            self.buffers.append(Buffer())
+
+    def receive(self, gradient, client_id):
+        b = client_id % self.B
+        self.buffers[b].add(gradient)
+
+    def nonEmpty(self):
+        # Check if all the buffers have at least 1 gradient
+        for b in self.buffers:
+            if not len(b):
+                return False
+        return True
+
+    def get_all_gradients(self) -> np.array:
+        gradients = [copy.deepcopy(b.avg_gradient) for b in self.buffers]
+        for b in self.buffers:
+            b.reset()
+
+        for x in gradients[0]:
+            np.array(x)
+        return gradients
 
 class BufferSet:
     pass
@@ -101,7 +137,13 @@ class BASGD(Server):
         #         return g
 
     def aggregate(self, gradient, worker_id=None):
-        """Update function for BASGD"""
+        """Update function for BASGD
+
+        How to rewrite this?
+        Input will be a flat numpy vector
+
+        At some point the (aggregated) vector needs to be unflattened and loaded onto the model
+        """
         # self.model.version += 1
         grad_data = gradient
         # grad_data = gradient["value"]
@@ -121,7 +163,10 @@ class BASGD(Server):
                     out.append([np.mean(x[idx], axis=0) for x in gradients])
                 return out
             # avg_grad = avg_gradients(buffer_gradients)
-            avg_grad = np.mean(buffer_gradients, axis=0)
+            # avg_grad = torch.mean(buffer_gradients, dim=1)
+            avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
+            # avg_grad = np.mean(buffer_gradients, axis=0)
+            unflatten_g(self.network, avg_grad, self.device)
             # avg_grad = [x for x in np.mean(buffer_gradients, axis=0)]
 
             # def avg_grads(gradients):
@@ -139,8 +184,7 @@ class BASGD(Server):
             # print(f'Dim buffer_gradients={buffer_gradients.shape}')
             # print(buffer_gradients)
             # avg_grad = self.buffers.get_all_gradients()
-            model_grads = unflatten
-            self.set_gradients(avg_grad)
+            # self.set_gradients(avg_grad)
             # self.grad_history[self.model.version] = [g.copy() for g in self.model.get_gradients()]
             # self.prev_weights = {key: value.detach().clone() for key, value in self.model.get_weights().items()}
             self.optimizer.step()

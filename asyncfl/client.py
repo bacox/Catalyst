@@ -11,7 +11,7 @@ class Client:
 
         self.pid = pid
         self.dataset_name = dataset_name
-        self.train_set, self.test_set = afl_dataset(dataset_name)
+        self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = MNIST_CNN().to(self.device)
@@ -34,49 +34,54 @@ class Client:
     def get_weights(self):
         return self.network.state_dict().copy()
 
-    def get_gradients(self):
-        # return model_gradients(self.network)
-        return self.g_flat.data.cpu().numpy()
-
-
-    # def train(self):
+    # def train(self, num_batches = -1):
     #     self.w_flat = flatten(self.network)
     #     self.g_flat = torch.zeros_like(self.w_flat)
+    #     try:
+    #         inputs, labels = next(iter(self.train_set))
+    #     except StopIteration as _si:
+    #         # Reload data
+    #         self.train_set, self.test_set = afl_dataset(self.dataset_name)
+    #         inputs, labels = next(iter(self.train_set))
+    #     # print(len(self.train_set))
+    #     inputs, labels = inputs.to(self.device), labels.to(self.device)
+    #     # print(labels)
+    #     # zero the parameter gradients
     #     self.optimizer.zero_grad()
-    #     for batch_idx, (inputs, labels) in enumerate(self.train_set):
-    #         inputs, labels = inputs.to(self.device), labels.to(self.device)
-    #         self.optimizer.zero_grad()
-    #         outputs = self.network(inputs)
-    #         loss = self.loss_function(outputs, labels)
-    #         loss.backward()
-    #         flatten_g(self.network, self.g_flat)
-    #         self.g_flat.add_(self.w_flat)
-    #         # print(self.g_flat)
-    #         self.optimizer.step()
-
-    def train(self):
-        self.w_flat = flatten(self.network)
-        self.g_flat = torch.zeros_like(self.w_flat)
-        try:
-            inputs, labels = next(self.train_set)
-        except StopIteration as _si:
-            # Reload data
-            self.train_set, self.test_set = afl_dataset(self.dataset_name)
-            inputs, labels = next(self.train_set)
-
-        inputs, labels = inputs.to(self.device), labels.to(self.device)
-        # zero the parameter gradients
-        self.optimizer.zero_grad()
-        outputs = self.network(inputs)
-        loss = self.loss_function(outputs, labels)
-        loss.backward()
-        flatten_g(self.network, self.g_flat)
-        self.g_flat.add_(self.w_flat)
-        self.optimizer.step()
+    #     outputs = self.network(inputs)
+    #     loss = self.loss_function(outputs, labels)
+    #     loss.backward()
+    #     flatten_g(self.network, self.g_flat)
+    #     # self.g_flat.add_(self.w_flat)
+    #     self.optimizer.step()
 
         # print('Finished training')
 
 
+    def train(self, num_batches = -1):
+        self.w_flat = flatten(self.network)
+        g_flat_local = torch.zeros_like(self.w_flat)
+        self.g_flat = torch.zeros_like(self.w_flat)
+        self.optimizer.zero_grad()
+        for batch_idx, (inputs, labels) in enumerate(self.train_set):
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
+            self.optimizer.zero_grad()
+            outputs = self.network(inputs)
+            loss = self.loss_function(outputs, labels)
+            loss.backward()
+            flatten_g(self.network, g_flat_local)
+            self.g_flat += g_flat_local
+            # print(self.g_flat)
+            self.optimizer.step()
+            if batch_idx == num_batches:
+                break
+            # print(self.g_flat)
+
+
+
+    def get_gradients(self):
+        # return model_gradients(self.network)
+        return self.g_flat.data.cpu().numpy()
     # def train(self):
     #     for i, (inputs, labels) in enumerate(self.train_set, 0):
     #         inputs, labels = inputs.to(self.device), labels.to(self.device)
