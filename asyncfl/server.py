@@ -11,7 +11,7 @@ class Server:
 
     def __init__(self, dataset) -> None:
         self.g_flat = None
-        print('Hello server')
+        # print('Hello server')
         self.clients = []
         self.dataset_name = dataset
         self.train_set, self.test_set = afl_dataset(self.dataset_name, use_iter=False)

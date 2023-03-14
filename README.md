@@ -20,3 +20,12 @@ Using weights is much easier to implement. You do not have to think about the le
 You just create a new model out of client weights.
 
 @TODO: Make sure all data is sent using a flattened vector.
+
+#### Implemented Methods
+
+| Method | Status |
+| ------ | :----: |
+| AFL    | Yes    |
+| BASGD  | Yes    |
+| Kardam | No     |
+|Telerig | No     |

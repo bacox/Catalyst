@@ -26,7 +26,7 @@ def get_sampler(dataset, n_clients=1, rank=0, seed=-1, shuffle=True) -> SubsetRa
     if shuffle:
         np.random.shuffle(indices)
     client_indices = indices[rank:dataset_size:n_clients]
-    print(f'Sampler for client {rank}')
+    # print(f'Sampler for client {rank}')
     return SubsetRandomSampler(client_indices)
 
 

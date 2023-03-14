@@ -1,7 +1,13 @@
 #
 # from .server import Server
+from multiprocessing import Pool, current_process, RLock
 from typing import List
-
+from tqdm.auto import tqdm
+from os import getpid
+import sys
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
 from . import Server
 from .client import Client
 from .task import Task
@@ -106,7 +112,7 @@ class Scheduler:
             clients[rc['_id']] = rc
         return sequence
 
-    def run_no_tasks(self, num_rounds, ct_clients = []):
+    def run_no_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr=''):
         """
         @TODO: Put dict of interaction sequence as argument
         @TODO: Save accuracy and loss and plot this in a graph
@@ -119,13 +125,13 @@ class Scheduler:
         @TODO: Show that non-IID and skewed compute time are bad for the accuracy
         @TODO: Break BASGD with a frequency attack
         """
-        print('Running without any tasks wrapper')
-
+        # print('Running without any tasks wrapper')
+        # print(f'Using position {position}')
         if not ct_clients:
             ct_clients = [1] * len(self.get_clients())
 
-        interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds)
-        print('Starting with every client joining to the server --> Get model')
+        interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds+1)
+        # print('Starting with every client joining to the server --> Get model')
 
         clients: List[Client] = self.get_clients()
         server = self.get_server()
@@ -134,56 +140,48 @@ class Scheduler:
         for c in clients:
             c.set_weights(initial_weights)
 
+        # To keep track of the metrics
+        server_metrics = []
+
         # Play all the server interactions
-        for update_id, client_id in enumerate(interaction_sequence):
-            # print(f'Training client {client_id}')
+        # with tqdm() as bar:
+        for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
+            if update_id % 20 == 0:
+                out = server.evaluate_accuracy()
+                server_metrics.append([update_id, out[0], out[1]])
+                pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client = clients[client_id]
             client.train(num_batches=1)
             server.client_update(client)
-            if update_id % 20 == 0:
-                # print('Check accuracy')
-                out = server.evaluate_accuracy()
-                # print(out)
-                print(f'[{update_id}/{num_rounds}]\tAccuracy {out[0]}% => loss = {out[1]}')
-        print('We can start training and interacting with the server according the compute times')
+        # pbar.close()
+        # print(server_metrics)
+
+        return server_metrics
+
+        # Plot data
 
 
 
-    def run(self):
+    def run_with_tasks_old(self):
 
         # Create task list
         tasks = []
-
         task: Task = Task(self.get_clients()[0], Client.get_pid)
         task()
-
-
         t2 = Task(self.get_clients()[-1], Client.print_pid_and_var, "hello world")
         t2()
-
         t3 = Task(self.get_clients()[0], Client.train, self.get_clients()[0].get_weights())
-
-
-
         t_c1_join = Task(self.get_server(), Server.client_join, self.get_clients()[0])
-
         t_c1_train = Task(self.get_clients()[0], Client.train)
-
         t_c1_update = Task(self.get_server(), Server.client_update, self.get_clients()[0])
-
-
         tasks = [t_c1_join]+ [t_c1_train, t_c1_update]*1000
-
         for t in tasks:
             t()
-
-
         for c in self.server.clients:
             self.server.client_join(c)
         # Run 5 times
         for i in range(5):
             print(f'Running iter {i}')
-
         return
         # current_model = self.server.client_join(self.clients[0])
         # self.clients
@@ -194,3 +192,35 @@ class Scheduler:
         print(grad)
         # for c in self.clients:
         #     c.train()
+
+    @staticmethod 
+    def run_util(cfg):
+        sched = Scheduler(**cfg)
+        num_rounds = cfg['num_rounds']
+        worker_id = int(current_process()._identity[0])
+        # print(f'Running task with workerID: {worker_id} <==>')
+        # print('')
+        # print(f'Starting run with name {cfg["name"]}', end='\r')
+        return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+
+    @staticmethod
+    def run_multiple(list_of_configs, pool_size=5):
+        outputs = []
+        
+        pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        # pbar = tqdm(total=len(list_of_configs))
+        
+        outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
+
+        # for i in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs, progress_disabled=True)):
+        #     print(i)
+        # with Pool(pool_size) as p:
+        #     outputs = p.map(Scheduler.run_util, list_of_configs)
+        return outputs
+        # for cfg in list_of_configs:
+        #     print(f'Running config: {cfg["name"]}')
+        #     num_rounds = cfg['num_rounds']
+        #     sched = Scheduler(**cfg)
+        #     server_metrics = sched.run_no_tasks(num_rounds)
+        #     outputs.append([server_metrics, cfg])
+        # return outputs
