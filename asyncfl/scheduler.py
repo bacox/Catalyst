@@ -209,7 +209,7 @@ class Scheduler:
         
         pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
         # pbar = tqdm(total=len(list_of_configs))
-        
+        # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
 
         # for i in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs, progress_disabled=True)):
