@@ -49,10 +49,11 @@ class Scheduler:
         # Create normal workers
         # client_data = [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']] + [(x, clients['client'], clients['client_args']) for x in clients['client_ct']]
         client_data = [(x, clients['client'], clients['client_args']) for x in clients['client_ct']] + [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']]
+        num_clients = len(client_data)
         for pid, (c_ct, client_class, client_args) in enumerate(client_data):
             # print(pid, c_ct, client_class, client_args)
             node_id = f'c_{pid}'
-            self.entities[node_id] = client_class(pid, self.dataset_name, self.model_name, **client_args)
+            self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
 
     # def create_entities(self, client_class, n, config = None, client_args = {}):

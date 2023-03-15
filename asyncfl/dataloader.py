@@ -9,6 +9,8 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler, DistributedSampler
 from torchvision import datasets, transforms
 
+from asyncfl.datasampler import UniformSampler
+
 def afl_dataset(name: str, train_batch_size=128, test_batch_size=128, client_id=0, n_clients=1, seed=-1, use_iter=True, data_root: str = '~/data') -> Optional[
     Tuple[Iterator[Any], Iterator[Any]]]:
     if name == 'mnist':
@@ -20,10 +22,12 @@ def afl_dataset(name: str, train_batch_size=128, test_batch_size=128, client_id=
     else:
         raise ValueError(f'Unknown dataset name "{name}"!')
     # @TODO: Add seed for deterministic sampling
-    train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
+    # train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
+    train_sampler = UniformSampler(train_dataset, n_clients, client_id, seed)
     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, sampler=train_sampler)
 
-    test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
+    # test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
+    test_sampler = UniformSampler(test_dataset, n_clients, client_id, seed)
     test_loader = DataLoader(test_dataset, batch_size=test_batch_size, sampler=test_sampler)
     if use_iter:
         return iter(train_loader), iter(test_loader)
@@ -41,6 +45,7 @@ def get_sampler(dataset, n_clients=1, rank=0, seed=-1, shuffle=True) -> SubsetRa
         np.random.shuffle(indices)
     client_indices = indices[rank:dataset_size:n_clients]
     # print(f'Sampler for client {rank}')
+    # return DistributedSampler()
     return SubsetRandomSampler(client_indices)
 
 
@@ -59,7 +64,17 @@ def load_cifar10(data_root: str = '~/data'):
     return train_dataset, test_dataset
 
 def load_cifar100(data_root: str = '~/data'):
-    pass
+    normalize = transforms.Normalize(mean=[0.507, 0.487, 0.441], std=[0.267, 0.256, 0.276])
+    transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, 4),
+        transforms.ToTensor(),
+        normalize
+    ])
+    train_dataset = datasets.CIFAR100(
+        data_root, train=True, download=True, transform=transform)
+    test_dataset = datasets.CIFAR100(data_root, train=False, transform=transform)
+    return train_dataset, test_dataset
 
 def load_mnist(data_root: str = '~/data'):
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])

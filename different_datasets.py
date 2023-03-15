@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 # Define configurations
 configs = []
 
-n = 3  # number of total clients
+n = 10  # number of total clients
 f = 0  # number of byzantine clients
-repetitions = 2
-num_rounds = 20
+# repetitions = 2
+num_rounds = 2500
 idx = 1
 configs.append({
-    'name': f'afl-{n}',
+    'name': f'afl-mnist-{n}',
     'num_rounds': num_rounds,
     'clients': {
         'client': AFL.Client,
@@ -28,7 +28,46 @@ configs.append({
     'server': AFL.Server,
     'server_args': {
     },
-    'dataset_name': 'cifar10'
+    'dataset_name': 'mnist',
+    'model_name': 'mnist-cnn'
+})
+configs.append({
+    'name': f'afl-cifar10-{n}',
+    'num_rounds': num_rounds,
+    'clients': {
+        'client': AFL.Client,
+        'client_args': {},
+        'client_ct': [1] * (n - f),
+        'n': n,
+        'f': f,
+        'f_type': AFL.NGClient,
+        'f_args': {'magnitude': 10},
+        'f_ct': [1] * f
+    },
+    'server': AFL.Server,
+    'server_args': {
+    },
+    'dataset_name': 'cifar10',
+    'model_name': 'cifar10-lenet'
+})
+configs.append({
+    'name': f'afl-cifar100-{n}',
+    'num_rounds': num_rounds,
+    'clients': {
+        'client': AFL.Client,
+        'client_args': {},
+        'client_ct': [1] * (n - f),
+        'n': n,
+        'f': f,
+        'f_type': AFL.NGClient,
+        'f_args': {'magnitude': 10},
+        'f_ct': [1] * f
+    },
+    'server': AFL.Server,
+    'server_args': {
+    },
+    'dataset_name': 'cifar100',
+    'model_name': 'cifar100-lenet'
 })
 
 outputs = AFL.Scheduler.run_multiple(configs, pool_size=10)

@@ -14,7 +14,7 @@ class Server:
         # print('Hello server')
         self.clients = []
         self.dataset_name = dataset
-        self.train_set, self.test_set = afl_dataset(self.dataset_name, use_iter=False)
+        self.train_set, self.test_set = afl_dataset(self.dataset_name, use_iter=False, client_id=0, n_clients=1)
         # if torch.cuda.is_available()
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.device = torch.device('cpu')
