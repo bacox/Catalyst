@@ -6,12 +6,11 @@ import matplotlib.pyplot as plt
 
 # Define configurations
 configs = []
-
 n = 10  # number of total clients
 f = 0  # number of byzantine clients
-# repetitions = 2
 num_rounds = 2500
 idx = 1
+# Config for mnist dataset
 configs.append({
     'name': f'afl-mnist-{n}',
     'num_rounds': num_rounds,
@@ -31,6 +30,7 @@ configs.append({
     'dataset_name': 'mnist',
     'model_name': 'mnist-cnn'
 })
+# Config for Cifar10 dataset
 configs.append({
     'name': f'afl-cifar10-{n}',
     'num_rounds': num_rounds,
@@ -50,6 +50,7 @@ configs.append({
     'dataset_name': 'cifar10',
     'model_name': 'cifar10-lenet'
 })
+# Config for Cifar100 dataset
 configs.append({
     'name': f'afl-cifar100-{n}',
     'num_rounds': num_rounds,
@@ -70,28 +71,34 @@ configs.append({
     'model_name': 'cifar100-lenet'
 })
 
+# Run all experiments multithreaded
 outputs = AFL.Scheduler.run_multiple(configs, pool_size=10)
+
+# Replace class names with strings for serialization
 for i in outputs:
     i[1]['clients']['client'] = i[1]['clients']['client'].__name__
     i[1]['clients']['f_type'] = i[1]['clients']['f_type'].__name__
     i[1]['server'] = i[1]['server'].__name__
+
+# Write raw data to file
 with open('data.json', 'w') as f:
     json.dump(outputs, f)
 
+# Load raw data from file
 outputs2 = ''
 with open('data.json', 'r') as f:
     outputs2 = json.load(f)
 
+# Process data into dataframe
 dfs = []
 for out in outputs2:
     name = out[1]['name']
     local_df = pd.DataFrame(out[0], columns=['round', 'accuracy', 'loss'])
     local_df['name'] = name
     dfs.append(local_df)
-
 server_df = pd.concat(dfs, ignore_index=True)
 
-
+# Visualize data
 plt.figure()
 sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
 plt.savefig('graph.png')
