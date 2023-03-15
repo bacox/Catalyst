@@ -7,6 +7,16 @@ import torch.nn.functional as F
 from torch import Tensor, optim
 
 
+def get_model_by_name(name: str):
+    if name == 'mnist_cnn':
+        return MNIST_CNN()
+    elif name == 'cifar10-lenet':
+        return LeNet(output_dim=10)
+    elif name == 'cifar100-lenet':
+        return LeNet(output_dim=100)
+    else:
+        raise ValueError(f'Unknown model name "{name}"!')
+
 def model_gradients(model: nn.Module) -> List[Any]:
     # gradients = []
     # for param in model.parameters():

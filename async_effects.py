@@ -19,13 +19,12 @@ configs = []
 n = 30 # number of total clients
 f = 0 # number of byzantine clients
 # num_rounds = 500
-repetitions = 3
+repetitions = 1
 num_rounds = 20
 idx = 1
 for n in range(3, 52,9):
     for _rep in range(repetitions):
         configs.append({
-            'position': idx,
             'name': f'afl-{n}',
         'num_rounds': num_rounds,
         'clients': {
@@ -44,9 +43,9 @@ for n in range(3, 52,9):
             'server_args': {
                 # 'num_buffers': 2
             },
-            'dataset_name': 'mnist'
+            'dataset_name': 'mnist',
+            'model_name': 'mnist_cnn'
         })
-        idx += 1
 
 # %%
 outputs = AFL.Scheduler.run_multiple(configs, pool_size=10)

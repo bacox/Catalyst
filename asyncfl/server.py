@@ -3,13 +3,13 @@ import torch
 
 from .dataloader import afl_dataset
 from .client import Client
-from .network import MNIST_CNN, model_gradients, flatten, unflatten_g
+from .network import MNIST_CNN, get_model_by_name, model_gradients, flatten, unflatten_g
 
 
 class Server:
 
 
-    def __init__(self, dataset) -> None:
+    def __init__(self, dataset: str, model_name: str) -> None:
         self.g_flat = None
         # print('Hello server')
         self.clients = []
@@ -18,7 +18,8 @@ class Server:
         # if torch.cuda.is_available()
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.device = torch.device('cpu')
-        self.network = MNIST_CNN().to(self.device)
+        # self.network = MNIST_CNN().to(self.device)
+        self.network = get_model_by_name(model_name).to(self.device)
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01)
         self.w_flat = flatten(self.network)
 

@@ -9,11 +9,25 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler, DistributedSampler
 from torchvision import datasets, transforms
 
-def afl_dataset(name: str, train_batch_size=128, test_batch_size=128, client_id=0, n_clients=1, seed=-1, use_iter=True) -> Optional[
+def afl_dataset(name: str, train_batch_size=128, test_batch_size=128, client_id=0, n_clients=1, seed=-1, use_iter=True, data_root: str = '~/data') -> Optional[
     Tuple[Iterator[Any], Iterator[Any]]]:
     if name == 'mnist':
-        return load_data("~/data", train_batch_size, test_batch_size, client_id, n_clients, seed, use_iter)
-    return None
+        train_dataset, test_dataset = load_mnist(data_root)
+    elif name == 'cifar10':
+        train_dataset, test_dataset = load_cifar10(data_root)
+    elif name == 'cifar100':
+        train_dataset, test_dataset = load_cifar10(data_root)
+    else:
+        raise ValueError(f'Unknown dataset name "{name}"!')
+    # @TODO: Add seed for deterministic sampling
+    train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
+    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, sampler=train_sampler)
+
+    test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
+    test_loader = DataLoader(test_dataset, batch_size=test_batch_size, sampler=test_sampler)
+    if use_iter:
+        return iter(train_loader), iter(test_loader)
+    return train_loader, test_loader
 
 
 def get_sampler(dataset, n_clients=1, rank=0, seed=-1, shuffle=True) -> SubsetRandomSampler:
@@ -30,25 +44,72 @@ def get_sampler(dataset, n_clients=1, rank=0, seed=-1, shuffle=True) -> SubsetRa
     return SubsetRandomSampler(client_indices)
 
 
-def load_data(data_root: str, train_batch_size: int,
-              test_batch_size: int,
-              client_id: int,
-              n_clients: int, seed= -1, use_iter=True) -> Tuple[DataLoader[Any], DataLoader[Any]]:
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+def load_cifar10(data_root: str = '~/data'):
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(32, 4),
+        transforms.ToTensor(),
+        normalize
+    ])
+    train_dataset = datasets.CIFAR10(
+        data_root, train=True, download=True, transform=transform
     )
+    test_dataset = datasets.CIFAR10(data_root, train=False, transform=transform)
+    return train_dataset, test_dataset
 
+def load_cifar100(data_root: str = '~/data'):
+    pass
+
+def load_mnist(data_root: str = '~/data'):
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     train_dataset = datasets.MNIST(
         data_root, train=True, download=True, transform=transform
     )
     test_dataset = datasets.MNIST(data_root, train=False, transform=transform)
+    return train_dataset, test_dataset
 
-    # @TODO: Add seed for deterministic sampling
-    train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
-    train_loader = DataLoader(train_dataset, batch_size=train_batch_size, sampler=train_sampler)
+# def load_data_set(data_set_name: str,  train_batch_size: int,
+#               test_batch_size: int,
+#               client_id: int,
+#               n_clients: int, seed= -1, use_iter=True, data_root:str = '~/data'):
+#     if data_set_name == 'minst':
+#         train_dataset, test_dataset = load_mnist(data_root)
+#     elif data_set_name == 'cifar10':
+#         train_dataset, test_dataset = load_cifar10(data_root)
+#     elif data_set_name == 'cifar100':
+#         train_dataset, test_dataset = load_cifar10(data_root)
+#     else:
+#         raise ValueError(f'Unknown dataset name "{data_set_name}"!')
+#     train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
+#     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, sampler=train_sampler)
 
-    test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
-    test_loader = DataLoader(test_dataset, batch_size=test_batch_size, sampler=test_sampler)
-    if use_iter:
-        return iter(train_loader), iter(test_loader)
-    return train_loader, test_loader
+#     test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
+#     test_loader = DataLoader(test_dataset, batch_size=test_batch_size, sampler=test_sampler)
+#     if use_iter:
+#         return iter(train_loader), iter(test_loader)
+#     return train_loader, test_loader
+
+
+# def load_data(data_root: str, train_batch_size: int,
+#               test_batch_size: int,
+#               client_id: int,
+#               n_clients: int, seed= -1, use_iter=True) -> Tuple[DataLoader[Any], DataLoader[Any]]:
+#     transform = transforms.Compose(
+#         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
+#     )
+
+#     train_dataset = datasets.MNIST(
+#         data_root, train=True, download=True, transform=transform
+#     )
+#     test_dataset = datasets.MNIST(data_root, train=False, transform=transform)
+
+#     # @TODO: Add seed for deterministic sampling
+#     train_sampler = get_sampler(train_dataset, n_clients, client_id, seed=seed)
+#     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, sampler=train_sampler)
+
+#     test_sampler = get_sampler(test_dataset, n_clients, client_id, seed=seed)
+#     test_loader = DataLoader(test_dataset, batch_size=test_batch_size, sampler=test_sampler)
+#     if use_iter:
+#         return iter(train_loader), iter(test_loader)
+#     return train_loader, test_loader

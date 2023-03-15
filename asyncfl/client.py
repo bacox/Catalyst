@@ -3,18 +3,19 @@ import copy
 import torch
 
 from .dataloader import afl_dataset
-from .network import MNIST_CNN, model_gradients, flatten, flatten_g
+from .network import MNIST_CNN, get_model_by_name, model_gradients, flatten, flatten_g
 
 
 class Client:
-    def __init__(self, pid, dataset_name: str) -> None:
+    def __init__(self, pid, dataset_name: str, model_name: str) -> None:
 
         self.pid = pid
         self.dataset_name = dataset_name
         self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-        self.network = MNIST_CNN().to(self.device)
+        # self.network = MNIST_CNN().to(self.device)
+        self.network = get_model_by_name(model_name).to(self.device)
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01, momentum=0.5)
         self.w_flat = flatten(self.network)

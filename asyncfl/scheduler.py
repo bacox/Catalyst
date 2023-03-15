@@ -14,12 +14,13 @@ from .task import Task
 
 class Scheduler:
 
-    def __init__(self, dataset_name: str, **config):
+    def __init__(self, dataset_name: str, model_name: str, **config):
         self.dataset_name = dataset_name
+        self.model_name = model_name
         self.clients: List[Client] = []
         self.entities = {}
         self.compute_times = {}
-        self.entities['server'] = config['server'](dataset_name, **config['server_args'])
+        self.entities['server'] = config['server'](dataset_name, model_name, **config['server_args'])
         self.create_entities(**config)
 
     # def __init__(self, server_class, client_class, num_clients, dataset_name: str, config = None, server_args = {}, client_args = {}):
@@ -51,7 +52,7 @@ class Scheduler:
         for pid, (c_ct, client_class, client_args) in enumerate(client_data):
             # print(pid, c_ct, client_class, client_args)
             node_id = f'c_{pid}'
-            self.entities[node_id] = client_class(pid, self.dataset_name, **client_args)
+            self.entities[node_id] = client_class(pid, self.dataset_name, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
 
     # def create_entities(self, client_class, n, config = None, client_args = {}):
