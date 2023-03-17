@@ -154,7 +154,10 @@ class Scheduler:
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client = clients[client_id]
             client.train(num_batches=1)
-            server.client_update(client)
+            gradients = client.get_gradients()
+            new_model_weights = server.client_update(client.get_pid(), gradients)
+            client.set_weights(new_model_weights)
+            # server.client_update(client)
         # pbar.close()
         # print(server_metrics)
 

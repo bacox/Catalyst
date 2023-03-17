@@ -44,7 +44,7 @@ for n in range(3, 52,9):
                 # 'num_buffers': 2
             },
             'dataset_name': 'mnist',
-            'model_name': 'mnist_cnn'
+            'model_name': 'mnist-cnn'
         })
 
 # %%

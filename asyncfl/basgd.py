@@ -108,88 +108,64 @@ class BufferSet:
         # return np.array(gradients)
 
 
+def median_aggregation(list_of_gradients):
+    length = len(list_of_gradients)
+    half_length = int((length - 1) / 2)
+    g_list = []
+    for i in range(len(list_of_gradients)):
+        g_list.append(list_of_gradients[i])
+    g_list, _ = torch.sort(torch.stack(g_list), dim=0)
+    g = torch.mean(g_list[half_length: length-half_length], dim=0)
+    return g
+
+def trmean_aggregation(list_of_gradients, q):
+    length = len(list_of_gradients)
+    g_list = []
+    for i in range(len(list_of_gradients)):
+        g_list.append(list_of_gradients[i])
+    g_list, _ = torch.sort(torch.stack(g_list), dim=0)
+    g = torch.mean(g_list[q:length-q], dim=0)
+    return g
+
+def krum_aggregation(list_of_gradients, q):
+    length = len(list_of_gradients)
+    # compute distance matrix
+    distance = []
+    for i in range(length):
+        distance.append(torch.FloatTensor([0]*length))
+    for i in range(length):
+        for j in range(i+1, length):
+            distance_ij = torch.norm(list_of_gradients[i].sub(list_of_gradients[j]), 2)
+            distance_ij.mul_(distance_ij)
+            distance[i][j] = distance_ij
+            distance[j][i] = distance_ij
+    # compute krum score
+    score = [0] * length
+    for i in range(length):
+        score[i] = torch.sum(torch.topk(distance[i], length-q-2, 0, largest=False, sorted=False)[0])
+    i_star = torch.topk(torch.FloatTensor(score), 1, 0, largest=False, sorted=False)[1]
+    return list_of_gradients[i_star]
+
 class BASGD(Server):
-    def __init__(self, dataset, num_buffers):
-        super().__init__(dataset)
-        print('Loading BASGD server')
+    def __init__(self, dataset: str, model_name: str, num_buffers, aggr_mode: str = 'async', q=1):
+        super().__init__(dataset, model_name)
         self.buffers = BufferSet(num_buffers)
+        self.aggr_mode = aggr_mode
+        self.q = q
 
-        # def aggregate_buffer(self, g_history, q, mode):
-        #     # @TODO: Make sure that telerig flattens the gradient in a single vector, not in a list of numpy ndarrays
-        #     # Use a torch tensor instead of numpy arrays
-        #     if mode == 'median':
-        #         length = len(g_history)
-        #         half_length = int((length - 1) / 2)
-        #         g_list = []
-        #         for i in range(len(g_history)):
-        #             g_list.append(g_history[i])
-        #         g_list, _ = torch.sort(torch.stack(g_list), dim=0)
-        #         g = torch.mean(g_list[half_length: length - half_length], dim=0)
-        #         return g
-        #
-        #     elif mode == 'trmean':
-        #         length = len(g_history)
-        #         g_list = []
-        #         for i in range(len(g_history)):
-        #             g_list.append(g_history[i])
-        #         g_list, _ = torch.sort(torch.stack(g_list), dim=0)
-        #         g = torch.mean(g_list[q:length - q], dim=0)
-        #         return g
-
-    def aggregate(self, gradient, worker_id=None):
-        """Update function for BASGD
-
-        How to rewrite this?
-        Input will be a flat numpy vector
-
-        At some point the (aggregated) vector needs to be unflattened and loaded onto the model
-        """
-        # self.model.version += 1
-        grad_data = gradient
-        # grad_data = gradient["value"]
-        self.buffers.receive(grad_data, worker_id)
+    def client_update(self, client_id: int, gradients: np.ndarray):
+        grads = torch.from_numpy(gradients)
+        self.buffers.receive(grads, client_id)
         if self.buffers.nonEmpty():
-            # print('Aggregate')
-            # applying the gradient and performing a step
             self.optimizer.zero_grad()
-            # Get the average gradient from the buffers and reset all the buffers
             buffer_gradients = self.buffers.get_all_gradients()
-
-
-            def avg_gradients(gradients):
-                out = []
-
-                for idx, x in enumerate(gradients[0]):
-                    out.append([np.mean(x[idx], axis=0) for x in gradients])
-                return out
-            # avg_grad = avg_gradients(buffer_gradients)
-            # avg_grad = torch.mean(buffer_gradients, dim=1)
-            avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
-            # avg_grad = np.mean(buffer_gradients, axis=0)
-            unflatten_g(self.network, avg_grad, self.device)
-            # avg_grad = [x for x in np.mean(buffer_gradients, axis=0)]
-
-            # def avg_grads(gradients):
-            #     avg_grads = []
-            #     for idx, _tensor in enumerate(gradients[0]):
-            #         avg_grads.append(torch.mean(torck.stac))
-            # avg_grad = [x for x in enumerate(buffer_gradients[0])]
-            # tstack = torch.stack(buffer_gradients)
-            # avg_grad = torch.mean(tstack, dim=0)
-            # print(f'Type avg_grad={type(avg_grad)}')
-            # print(f'Dim avg_grad={avg_grad}')
-            # print(avg_grad)
-            #
-            # print(f'Type buffer_gradients={type(buffer_gradients)}')
-            # print(f'Dim buffer_gradients={buffer_gradients.shape}')
-            # print(buffer_gradients)
-            # avg_grad = self.buffers.get_all_gradients()
-            # self.set_gradients(avg_grad)
-            # self.grad_history[self.model.version] = [g.copy() for g in self.model.get_gradients()]
-            # self.prev_weights = {key: value.detach().clone() for key, value in self.model.get_weights().items()}
-            self.optimizer.step()
-        # else:
-        #     print('Buffer empty')
-
-        # In any case, return the last known model
-        # return self.model.get_weights()
+            if self.aggr_mode == 'median':
+                avg_grad = median_aggregation(buffer_gradients)
+            elif self.aggr_mode == 'trmean':
+                avg_grad = trmean_aggregation(buffer_gradients, self.q)
+            elif self.aggr_mode == 'krum':
+                avg_grad = krum_aggregation(buffer_gradients, self.q)
+            else:
+                avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
+            self.aggregate(avg_grad)
+        return self.get_model_weights()

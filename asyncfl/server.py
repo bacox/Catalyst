@@ -32,17 +32,22 @@ class Server:
 
     def send_model(self, client: Client):
         client.set_weights(self.get_model_weights())
+    
 
-    def client_update(self, client: Client):
-        # w_flat = flatten(self.network)
-        self.g_flat = torch.zeros_like(self.w_flat)
-        client_gradients = client.get_gradients()
-        client_gradients = torch.from_numpy(client_gradients)
-        unflatten_g(self.network, client_gradients, self.device)
-        # print(f'Received update from {type(client)} with PID: {client.get_pid()}')
-        self.aggregate(client_gradients, client.get_pid())
-        current_model_weights = self.get_model_weights()
-        client.set_weights(current_model_weights)
+    def client_update(self, _client_id: int, gradients: np.ndarray):
+        client_gradients = torch.from_numpy(gradients)
+        self.aggregate(client_gradients)
+        return self.get_model_weights()
+
+    # def client_update(self, client: Client):
+    #     # self.g_flat = torch.zeros_like(self.w_flat)
+    #     client_gradients = client.get_gradients()
+    #     client_gradients = torch.from_numpy(client_gradients)
+    #     # Transform flat vector into model dimensions
+    #     # unflatten_g(self.network, client_gradients, self.device)
+    #     self.aggregate(client_gradients, client.get_pid())
+    #     current_model_weights = self.get_model_weights()
+    #     client.set_weights(current_model_weights)
 
     def set_gradients(self, gradients):
         """Merges the new gradients and assigns them to their relevant parameter"""
@@ -57,14 +62,9 @@ class Server:
                     raise e
         # self.network.to(self.device)
 
-    def aggregate(self, client_gradients, client_id):
+    def aggregate(self, client_gradients):
         """Merges the new gradients and assigns them to their relevant parameter
         Uses the optimizer update the model based on the gradients
-        @TODO: Want to replace this with a manual aggregation step
-
-
-        How to rewrite this?
-        Input will be a flat numpy vector?
         """
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()

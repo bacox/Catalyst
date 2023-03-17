@@ -5,8 +5,8 @@ from asyncfl.network import model_gradients
 
 
 class RDCLient(Client):
-    def __init__(self, pid, dataset_name: str, a_atk=0.2):
-        super().__init__(pid, dataset_name)
+    def __init__(self, pid, num_clients, dataset_name: str, model_name: str, a_atk=0.2):
+        super().__init__(pid, num_clients, dataset_name, model_name)
         self.a_atk = a_atk
 
 
