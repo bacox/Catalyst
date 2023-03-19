@@ -39,7 +39,7 @@ class Server:
 
     def client_update(self, _client_id: int, gradients: np.ndarray, gradient_age: int):
         client_gradients = torch.from_numpy(gradients)
-        print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
+        # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
         return self.get_model_weights()
 
