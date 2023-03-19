@@ -11,6 +11,7 @@ class NGClient(Client):
 
     def get_gradients(self):
         # gradients =  model_gradients(self.network)
-        return super().get_gradients() * -1.0 * self.magnitude
+        gradients, age = super().get_gradients()
+        return [gradients * -1.0 * self.magnitude, age]
         # return self.g_flat.data.cpu().numpy()
         # return [x * -1 * self.magnitude for x in model_gradients(self.network)]

@@ -1,4 +1,5 @@
 import copy
+from typing import List
 
 import torch
 
@@ -20,6 +21,7 @@ class Client:
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01, momentum=0.5)
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
+        self.local_age = 0
 
     def get_pid(self):
         # print(f'My PID is: {self.pid}')
@@ -28,8 +30,9 @@ class Client:
     def print_pid_and_var(self, extra_text):
         print(f'My pid is {self.pid} + "{extra_text}"')
 
-    def set_weights(self, weights):
+    def set_weights(self, weights, age: int):
         # print('Setting weigths')
+        self.local_age = age
         self.network.load_state_dict(copy.deepcopy(weights))
 
     def get_weights(self):
@@ -82,7 +85,7 @@ class Client:
 
     def get_gradients(self):
         # return model_gradients(self.network)
-        return self.g_flat.data.cpu().numpy()
+        return [self.g_flat.data.cpu().numpy(), self.local_age]
     # def train(self):
     #     for i, (inputs, labels) in enumerate(self.train_set, 0):
     #         inputs, labels = inputs.to(self.device), labels.to(self.device)

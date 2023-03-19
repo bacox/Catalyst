@@ -19,6 +19,7 @@ class Server:
         self.network = get_model_by_name(model_name).to(self.device)
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01)
         self.w_flat = flatten(self.network)
+        self.age = 0
 
     def get_model_weights(self):
         return self.network.state_dict()
@@ -33,9 +34,12 @@ class Server:
     def send_model(self, client: Client):
         client.set_weights(self.get_model_weights())
     
+    def get_age(self):
+        return self.age
 
-    def client_update(self, _client_id: int, gradients: np.ndarray):
+    def client_update(self, _client_id: int, gradients: np.ndarray, gradient_age: int):
         client_gradients = torch.from_numpy(gradients)
+        print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
         return self.get_model_weights()
 
@@ -68,6 +72,7 @@ class Server:
         """
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
+        self.age += 1
 
     def evaluate_accuracy(self):
         self.network.eval()

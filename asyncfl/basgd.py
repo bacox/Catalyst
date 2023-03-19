@@ -153,8 +153,9 @@ class BASGD(Server):
         self.aggr_mode = aggr_mode
         self.q = q
 
-    def client_update(self, client_id: int, gradients: np.ndarray):
+    def client_update(self, client_id: int, gradients: np.ndarray, gradient_age):
         grads = torch.from_numpy(gradients)
+        print(f'Got gradient from client {client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.buffers.receive(grads, client_id)
         if self.buffers.nonEmpty():
             self.optimizer.zero_grad()

@@ -136,11 +136,12 @@ class Scheduler:
         # print('Starting with every client joining to the server --> Get model')
 
         clients: List[Client] = self.get_clients()
-        server = self.get_server()
+        server: Server = self.get_server()
 
         initial_weights = server.get_model_weights()
+        model_age = server.get_age()
         for c in clients:
-            c.set_weights(initial_weights)
+            c.set_weights(initial_weights, model_age)
 
         # To keep track of the metrics
         server_metrics = []
@@ -152,11 +153,11 @@ class Scheduler:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
-            client = clients[client_id]
+            client: Client = clients[client_id]
             client.train(num_batches=1)
-            gradients = client.get_gradients()
-            new_model_weights = server.client_update(client.get_pid(), gradients)
-            client.set_weights(new_model_weights)
+            grad_data = client.get_gradients()
+            new_model_weights = server.client_update(client.get_pid(), *grad_data)
+            client.set_weights(new_model_weights, server.get_age())
             # server.client_update(client)
         # pbar.close()
         # print(server_metrics)

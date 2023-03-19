@@ -11,5 +11,6 @@ class RDCLient(Client):
 
 
     def get_gradients(self):
+        # @TODO: Fix this, make it compatible with the super call!
         return [torch.add(torch.from_numpy(g), torch.randn_like(torch.from_numpy(g)).mul_(
             self.a_atk * torch.norm(torch.from_numpy(g), 2))).numpy() for g in model_gradients(self.network)]
