@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+import copy
 from .dataloader import afl_dataset
 from .client import Client
 from .network import get_model_by_name, model_gradients, flatten, unflatten_g
@@ -17,9 +17,12 @@ class Server:
         self.device = torch.device(
             'cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = get_model_by_name(model_name).to(self.device)
-        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01)
+        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.005)
         self.w_flat = flatten(self.network)
         self.age = 0
+
+    def set_weights(self, weights):
+        self.network.load_state_dict(copy.deepcopy(weights))
 
     def get_model_weights(self):
         return self.network.state_dict()
@@ -41,7 +44,8 @@ class Server:
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
-        return self.get_model_weights()
+        return flatten(self.network)
+        # return self.get_model_weights()
 
     # def client_update(self, client: Client):
     #     # self.g_flat = torch.zeros_like(self.w_flat)

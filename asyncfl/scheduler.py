@@ -1,17 +1,22 @@
 #
 # from .server import Server
-from multiprocessing import Pool, current_process, RLock
+from multiprocessing import Pool, current_process, RLock, Process
 from typing import List
+import torch
 from tqdm.auto import tqdm
 from os import getpid
 import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from . import Server
+from .network import get_model_by_name, model_gradients, flatten, unflatten_b, unflatten_g, flatten_g, unflatten
+from asyncfl.network import flatten
+from .server import Server
 from .client import Client
 from .task import Task
-
+import asyncio
+import random
+from threading import Thread
 class Scheduler:
 
     def __init__(self, dataset_name: str, model_name: str, **config):
@@ -50,11 +55,49 @@ class Scheduler:
         # client_data = [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']] + [(x, clients['client'], clients['client_args']) for x in clients['client_ct']]
         client_data = [(x, clients['client'], clients['client_args']) for x in clients['client_ct']] + [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']]
         num_clients = len(client_data)
+
+
+        def create_client(self, pid, c_ct, client_class, client_args):
+            node_id = f'c_{pid}'
+            # print(f'Starting node: {node_id}')
+            self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
+            self.compute_times[pid] = c_ct
+        
+        # async def create_all_clients(self, client_data):
+        #     # print('All gather ')
+        #     await asyncio.gather(*[create_client(self, pid, *c_args) for (pid, c_args) in enumerate(client_data)])
+        
+
+        def create_client_aux(self, pid, c_args):
+            p = Thread(target=create_client, args=(self, pid, *c_args), daemon=False)
+            # p.daemon = False
+            p.start()
+            return p        
+        loading_processes = []
         for pid, (c_ct, client_class, client_args) in enumerate(client_data):
             # print(pid, c_ct, client_class, client_args)
             node_id = f'c_{pid}'
-            self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
-            self.compute_times[pid] = c_ct
+            loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
+
+        [x.join() for x in loading_processes]
+
+            # self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
+            # self.compute_times[pid] = c_ct
+
+        # with Pool(5) as pp:
+        #     pp.ma(create_client, )
+        # pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        # # pbar = tqdm(total=len(list_of_configs))
+        # # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
+        # outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
+
+        # asyncio.run(create_all_clients(self, client_data))
+
+        # for pid, (c_ct, client_class, client_args) in enumerate(client_data):
+        #     # print(pid, c_ct, client_class, client_args)
+        #     node_id = f'c_{pid}'
+        #     self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
+        #     self.compute_times[pid] = c_ct
 
     # def create_entities(self, client_class, n, config = None, client_args = {}):
     #     """
@@ -138,10 +181,13 @@ class Scheduler:
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
-        initial_weights = server.get_model_weights()
+        # initial_weights = server.get_model_weights()
+        initial_weights = flatten(server.network)
         model_age = server.get_age()
         for c in clients:
-            c.set_weights(initial_weights, model_age)
+            # c.set_weights(initial_weights, model_age)
+            unflatten(c.network, initial_weights.detach().clone())
+            # c.set_weights(initial_weights, model_age)
 
         # To keep track of the metrics
         server_metrics = []
@@ -149,15 +195,87 @@ class Scheduler:
         # Play all the server interactions
         # with tqdm() as bar:
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
-            if update_id % 20 == 0:
+            if update_id % 50 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client: Client = clients[client_id]
             client.train(num_batches=1)
-            grad_data = client.get_gradients()
-            new_model_weights = server.client_update(client.get_pid(), *grad_data)
-            client.set_weights(new_model_weights, server.get_age())
+
+
+            # client_grad_data = client.get_gradients()
+            # new_model_weights = server.client_update(client.get_pid(), *client_grad_data)
+            # client.set_weights(new_model_weights, server.get_age())
+
+
+            # This works realy well!!
+            # c_model_weights = client.get_weights()
+            # server.set_weights(c_model_weights)
+            # new_model_weights = server.get_model_weights()
+            # client.set_weights(new_model_weights, server.get_age())
+
+
+            # New attempt by copying the buffers as well
+
+
+            # c_weights, c_buffers = client.get_weight_vectors()
+            # unflatten_b(server.network, c_buffers)
+
+            # unflatten(server.network, c_weights)
+
+
+            c_gradients, c_buffers, age = client.get_gradient_vectors()
+            unflatten_b(server.network, c_buffers)
+            new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
+            client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+
+
+            # Attempt to only use paramters and not state_dict
+            # c_param = client.network.parameters()
+
+            # for target_param, param in zip(server.network.parameters(), c_param):
+            #     target_param.data.copy_(param.data)
+
+            # for target_param, param in zip(client.network.parameters(), server.network.parameters()):
+            #     target_param.data.copy_(param.data)
+
+            # new_model_weights = server.get_model_weights()
+            # client.set_weights(new_model_weights, server.get_age())
+
+
+            # c_weights = flatten(client.network).detach().clone()
+            # s_weights = flatten(server.network).detach().clone()
+            # s_grad_flat = torch.zeros_like(c_weights)
+            # flatten_g(client.network, s_grad_flat)
+            # s_grad_flat = s_grad_flat.detach().clone()
+            # diff1 = c_weights - s_weights
+            # diff2 = s_weights - c_weights
+
+
+            # c_weights = client.get_weights()
+            # c_grad = torch.from_numpy(client.get_gradients()[0])
+            # cw_flat = flatten(client.network).detach()
+            # s_flat = flatten(server.network).detach()
+
+            # diff_flat = cw_flat - s_flat
+            # diff_flat2 = s_flat - cw_flat
+
+
+            # server.set_weights(c_weights)
+            # new_model_weights = server.get_model_weights()
+            # s2_flat = flatten(server.network)
+
+
+            # # grad_data = client.get_gradients()
+            # # c_weights = flatten(client.network)
+            # # s_weights = flatten(server.network)
+            # # t_grad_data = torch.from_numpy(grad_data[0])
+            # # dff = c_weights - s_weights
+            # # # c_grad = 
+            # # server.set_weights(c_weights)
+            # new_model_weights = server.client_update(client.get_pid(), *grad_data)
+            # # new_model_weights = server.get_model_weights()
+            # client.set_weights(new_model_weights, server.get_age())
             # server.client_update(client)
         # pbar.close()
         # print(server_metrics)

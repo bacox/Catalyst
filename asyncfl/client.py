@@ -2,23 +2,24 @@ import copy
 from typing import List
 
 import torch
-
+import numpy as np
 from .dataloader import afl_dataset
-from .network import MNIST_CNN, get_model_by_name, model_gradients, flatten, flatten_g
+from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
 
 
 class Client:
-    def __init__(self, pid, num_clients, dataset_name: str, model_name: str) -> None:
+    def __init__(self, pid, num_clients, dataset_name: str, model_name: str, sampler, sampler_args={}) -> None:
 
         self.pid = pid
         self.dataset_name = dataset_name
-        self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid, n_clients=num_clients)
+        self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.network = MNIST_CNN().to(self.device)
         self.network = get_model_by_name(model_name).to(self.device)
         self.loss_function = torch.nn.CrossEntropyLoss()
-        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.01, momentum=0.5)
+        self.lr = 0.005
+        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.lr, momentum=0.5)
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
@@ -37,10 +38,34 @@ class Client:
 
     def get_weights(self):
         return self.network.state_dict().copy()
+    
+
+    def get_weight_vectors(self):
+        # Make flat vector of paramters
+        # Make flat vector of buffers
+        return [flatten(self.network), flatten_b(self.network)]
+    
+    def get_gradient_vectors(self):
+        # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
+        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.local_age]
+    
+
+    def set_weight_vectors(self, weights: np.ndarray, age):
+        self.local_age = age
+        unflatten(self.network, torch.from_numpy(weights).to(self.device))
+    
+
+
+    def polyak_update(polyak_factor, target_network, network):
+        for target_param, param in zip(target_network.parameters(), network.parameters()):
+            target_param.data.copy_(polyak_factor*param.data + target_param.data*(1.0 - polyak_factor))
+    
 
     # def train(self, num_batches = -1):
+    #     self.optimizer.zero_grad()
     #     self.w_flat = flatten(self.network)
     #     self.g_flat = torch.zeros_like(self.w_flat)
+    #     g_flat_local = torch.zeros_like(self.w_flat)
     #     try:
     #         inputs, labels = next(iter(self.train_set))
     #     except StopIteration as _si:
@@ -51,15 +76,19 @@ class Client:
     #     inputs, labels = inputs.to(self.device), labels.to(self.device)
     #     # print(labels)
     #     # zero the parameter gradients
-    #     self.optimizer.zero_grad()
     #     outputs = self.network(inputs)
     #     loss = self.loss_function(outputs, labels)
     #     loss.backward()
-    #     flatten_g(self.network, self.g_flat)
-    #     # self.g_flat.add_(self.w_flat)
+    #     flatten_g(self.network, g_flat_local)
+    #     g_flat_local = g_flat_local.detach().clone()
+    #     # Not sure if we want to multiply against the learning rate already
+    #     # g_flat_local.mul_(self.lr)
+    #     self.g_flat.add_(g_flat_local)
+    #     # self.g_flat.add_(self.w_flat.detach().clone())
     #     self.optimizer.step()
+    #     # self.optimizer.zero_grad()
 
-        # print('Finished training')
+    #     # print('Finished training')
 
 
     def train(self, num_batches = -1):
@@ -74,7 +103,8 @@ class Client:
             loss = self.loss_function(outputs, labels)
             loss.backward()
             flatten_g(self.network, g_flat_local)
-            self.g_flat += g_flat_local
+            # g_flat_local.g_flat.mul_(self.lr)
+            self.g_flat.add_(g_flat_local)
             # print(self.g_flat)
             self.optimizer.step()
             if batch_idx == num_batches:
@@ -85,7 +115,8 @@ class Client:
 
     def get_gradients(self):
         # return model_gradients(self.network)
-        return [self.g_flat.data.cpu().numpy(), self.local_age]
+        return [self.g_flat.cpu().detach().clone().numpy(), self.local_age]
+        # return [self.g_flat.grad.data.cpu().detach().clone().numpy(), self.local_age]
     # def train(self):
     #     for i, (inputs, labels) in enumerate(self.train_set, 0):
     #         inputs, labels = inputs.to(self.device), labels.to(self.device)

@@ -6,15 +6,16 @@ import matplotlib.pyplot as plt
 
 # Define configurations
 configs = []
-n = 10  # number of total clients
+n = 100  # number of total clients
 f = 0  # number of byzantine clients
-num_rounds =100
+num_rounds = 1000
 idx = 1
-repetitions = 10
+repetitions = 3
 # Config for mnist dataset
 for _r in range(repetitions):
+    damp_alpha = 0.025
     configs.append({
-        'name': f'kardam-mnist',
+        'name': f'kardam-mnist-a{damp_alpha}',
         'num_rounds': num_rounds,
         'clients': {
             'client': AFL.Client,
@@ -28,13 +29,100 @@ for _r in range(repetitions):
         },
         'server': AFL.Kardam,
         'server_args': {
+        'damp_alpha': damp_alpha
+        },
+        'dataset_name': 'mnist',
+        'model_name': 'mnist-cnn'
+    })
+    damp_alpha = 0.2
+    configs.append({
+        'name': f'kardam-mnist-a{damp_alpha}',
+        'num_rounds': num_rounds,
+        'clients': {
+            'client': AFL.Client,
+            'client_args': {},
+            'client_ct': [1] * (n - f),
+            'n': n,
+            'f': f,
+            'f_type': AFL.NGClient,
+            'f_args': {'magnitude': 10},
+            'f_ct': [1] * f
+        },
+        'server': AFL.Kardam,
+        'server_args': {
+        'damp_alpha': damp_alpha
+        },
+        'dataset_name': 'mnist',
+        'model_name': 'mnist-cnn'
+    })
+    damp_alpha = 0.01
+    configs.append({
+        'name': f'kardam-mnist-a{damp_alpha}',
+        'num_rounds': num_rounds,
+        'clients': {
+            'client': AFL.Client,
+            'client_args': {},
+            'client_ct': [1] * (n - f),
+            'n': n,
+            'f': f,
+            'f_type': AFL.NGClient,
+            'f_args': {'magnitude': 10},
+            'f_ct': [1] * f
+        },
+        'server': AFL.Kardam,
+        'server_args': {
+        'damp_alpha': damp_alpha
+        },
+        'dataset_name': 'mnist',
+        'model_name': 'mnist-cnn'
+    })
+    damp_alpha = 0.05
+    configs.append({
+        'name': f'kardam-mnist-a{damp_alpha}',
+        'num_rounds': num_rounds,
+        'clients': {
+            'client': AFL.Client,
+            'client_args': {},
+            'client_ct': [1] * (n - f),
+            'n': n,
+            'f': f,
+            'f_type': AFL.NGClient,
+            'f_args': {'magnitude': 10},
+            'f_ct': [1] * f
+        },
+        'server': AFL.Kardam,
+        'server_args': {
+        'damp_alpha': damp_alpha
+        },
+        'dataset_name': 'mnist',
+        'model_name': 'mnist-cnn'
+    })
+    num_buffers = 10
+    configs.append({
+        'name': f'basgd-mnist-{n}',
+        'num_rounds': num_rounds,
+        'clients': {
+            'client': AFL.Client,
+            'client_args': {},
+            'client_ct': [1] * (n - f),
+            # 'client_ct': list(np.random.uniform(0.5, 1.5, n - f)),
+            'n': n,
+            'f': f,
+            'f_type': AFL.NGClient,
+            'f_args': {'magnitude': 10},
+            'f_ct': [1] * f
+        },
+        'server': AFL.BASGD,
+        'server_args': {
+            'num_buffers': num_buffers,
+            'aggr_mode': 'median'
         },
         'dataset_name': 'mnist',
         'model_name': 'mnist-cnn'
     })
 
 # Run all experiments multithreaded
-outputs = AFL.Scheduler.run_multiple(configs, pool_size=10)
+outputs = AFL.Scheduler.run_multiple(configs, pool_size=3)
 
 # Replace class names with strings for serialization
 for i in outputs:
