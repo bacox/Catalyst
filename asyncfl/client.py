@@ -16,7 +16,8 @@ class Client:
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.network = MNIST_CNN().to(self.device)
-        self.network = get_model_by_name(model_name).to(self.device)
+        # self.network = get_model_by_name(model_name).to(self.device)
+        self.network = get_model_by_name(model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.lr = 0.005
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.lr, momentum=0.5)
@@ -59,7 +60,14 @@ class Client:
     def polyak_update(polyak_factor, target_network, network):
         for target_param, param in zip(target_network.parameters(), network.parameters()):
             target_param.data.copy_(polyak_factor*param.data + target_param.data*(1.0 - polyak_factor))
-    
+
+    # GPU AUX FUNCTIONS
+    def move_to_gpu(self):
+        self.network.to(self.device)
+        pass
+
+    def move_to_cpu(self):
+        self.network.to(torch.device('cpu'))
 
     # def train(self, num_batches = -1):
     #     self.optimizer.zero_grad()

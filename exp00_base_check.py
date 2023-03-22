@@ -13,28 +13,25 @@ if __name__ == '__main__':
                     action="store_true")
     args = parser.parse_args()
 
+    print('Exp 0: This experiment is to run baselines. The model used is ResNet9 with the Cifar100 dataset. '
+          +'Different number of clients are used: 50,25,10,5,1. The training is fully asynchronous SGD.')
+
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
     exp_name = 'exp00_base_check_epoch_lr'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
-        # Run experiment
         # Define configurations
         configs = []
-        # n = 3  # number of total clients
         f = 0  # number of byzantine clients
         num_rounds = 50*10
         idx = 1
-        # Config for Cifar10 dataset
-        repetitions = 3
+        repetitions = 2
         limit = 10
         for _r in range(repetitions):
-            # for model_name in ['cifar100-resnet','cifar100-vgg','cifar100-lenet']:
-            for n in [25,10, 5, 1]:
+            for n in [50,25,10, 5, 1]:
                 for model_name in ['cifar100-resnet9']:
-                # for model_name in ['cifar100-vgg']:
-
                     configs.append({
                             'name': f'afl-{model_name}-cifar100-n{n}',
                             'num_rounds': num_rounds,
@@ -82,13 +79,17 @@ if __name__ == '__main__':
     for out in outputs2:
         name = out[1]['name']
         local_df = pd.DataFrame(out[0], columns=['round', 'accuracy', 'loss'])
-        local_df['name'] = name
+        local_df['name'] = name.split('-')[-1]
         dfs.append(local_df)
     server_df = pd.concat(dfs, ignore_index=True)
 
     graph_file = graphs_path / f'{exp_name}.png'
     # Visualize data
-    plt.figure()
-    sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
+    plt.figure(figsize=(8,4))
+    g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
+    plt.title('Different number of clients in async Learning. Cifar100 - ResNet9')
+    plt.xlabel('Rounds')
+    plt.ylabel('Test accuracy')
+    g.legend_.set_title(None)
     plt.savefig(graph_file)
     plt.show()

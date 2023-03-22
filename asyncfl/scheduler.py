@@ -14,6 +14,7 @@ from asyncfl.network import flatten
 from .server import Server
 from .client import Client
 from .task import Task
+import gc
 import asyncio
 import random
 from threading import Thread
@@ -200,6 +201,7 @@ class Scheduler:
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client: Client = clients[client_id]
+            client.move_to_gpu()
             client.train(num_batches=1)
 
 
@@ -228,6 +230,9 @@ class Scheduler:
             unflatten_b(server.network, c_buffers)
             new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
             client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+            client.move_to_cpu()
+            # gc.collect()
+            # torch.cuda.empty_cache()
 
 
             # Attempt to only use paramters and not state_dict
