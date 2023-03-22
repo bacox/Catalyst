@@ -14,6 +14,7 @@ from asyncfl.network import flatten
 from .server import Server
 from .client import Client
 from .task import Task
+import numpy as np
 import gc
 import asyncio
 import random
@@ -157,15 +158,57 @@ class Scheduler:
             rc['ct_left'] = rc['ct']
             clients[rc['_id']] = rc
         return sequence
+    
+    def run_sync_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr=''):
+        clients: List[Client] = self.get_clients()
+        server: Server = self.get_server()
+
+        initial_weights = flatten(server.network)
+        model_age = server.get_age()
+        for c in clients:
+            unflatten(c.network, initial_weights.detach().clone())
+
+        server_metrics = []
+        update_counter = 0
+        for idx_, update_id in enumerate(pbar:= tqdm(range(num_rounds), position=position, leave=None)):
+            # print(f'Round {update_id}')
+            if update_id % 5 == 0:
+                out = server.evaluate_accuracy()
+                server_metrics.append([update_id, out[0], out[1]])
+                pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
+            gradients = []
+            buffers = []
+            update_counter += len(clients)
+            for client in clients:
+                client.move_to_gpu()
+                client.train(num_batches=1)
+                c_gradients, c_buffers, age = client.get_gradient_vectors()
+                gradients.append(c_gradients)
+                buffers.append(c_buffers)
+                client.move_to_cpu()
+
+            agv_gradient = np.mean(gradients, axis=0)
+            avg_buffers = torch.mean(torch.stack(buffers), dim=0)
+            unflatten_b(server.network, avg_buffers)
+            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, age)
+            # new_model_weights_vector = server.get_model_weights()
+            for client in clients:
+                client.move_to_gpu()
+                client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+                client.move_to_cpu()
+
+                # unflatten_b(server.network, c_buffers)
+                # new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
+                # client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+                # client.move_to_cpu()
+        return server_metrics
+
 
     def run_no_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr=''):
         """
         @TODO: Put dict of interaction sequence as argument
-        @TODO: Save accuracy and loss and plot this in a graph
         @TODO: Save participation statistics of the clients and plot this in a graph.
         @TODO: Keep track of the model staleness (age), and plot this in a graph
-        @TODO: Clean up the code
-        @TODO: Implement BASGD (Mainly copying code)
         @TODO: Create non-IID scenario
         @TODO: Make sure that the server loads the full test set and the clients the splitted train set
         @TODO: Show that non-IID and skewed compute time are bad for the accuracy
@@ -189,7 +232,7 @@ class Scheduler:
 
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
-            if update_id % 50 == 0:
+            if update_id % 5 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
@@ -255,4 +298,18 @@ class Scheduler:
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
 
         return outputs
+
+    @staticmethod 
+    def run_util_sync(cfg):
+        sched = Scheduler(**cfg)
+        num_rounds = cfg['num_rounds']
+        # worker_id = int(current_process()._identity[0])
+        worker_id = 1
+        return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+
+
+    @staticmethod
+    def run_sync(list_of_configs, pool_size=5):
+        return [Scheduler.run_util_sync(cfg) for cfg in tqdm(list_of_configs, total=len(list_of_configs), position=0, leave=None, desc='Total')]
+        # return [Scheduler.run_util_sync(cfg) for cfg in list_of_configs]
 
