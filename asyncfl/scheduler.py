@@ -159,7 +159,7 @@ class Scheduler:
             clients[rc['_id']] = rc
         return sequence
     
-    def run_sync_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr=''):
+    def run_sync_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr='', client_participation=1.0):
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
@@ -172,6 +172,9 @@ class Scheduler:
         update_counter = 0
         for idx_, update_id in enumerate(pbar:= tqdm(range(num_rounds), position=position, leave=None)):
             # print(f'Round {update_id}')
+            num_clients = int(np.max([1, np.floor(float(len(clients))*client_participation)]))
+            selected_clients = np.random.choice(clients, num_clients, replace=False)
+            # print(f'Client participation: {num_clients}')
             if update_id % 5 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
@@ -179,7 +182,7 @@ class Scheduler:
             gradients = []
             buffers = []
             update_counter += len(clients)
-            for client in clients:
+            for client in selected_clients:
                 client.move_to_gpu()
                 client.train(num_batches=1)
                 c_gradients, c_buffers, age = client.get_gradient_vectors()
@@ -232,6 +235,7 @@ class Scheduler:
 
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
+
             if update_id % 5 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
@@ -305,7 +309,8 @@ class Scheduler:
         num_rounds = cfg['num_rounds']
         # worker_id = int(current_process()._identity[0])
         worker_id = 1
-        return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+        cfg['client_participartion'] = cfg.get('client_participartion', 1.0)
+        return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
 
 
     @staticmethod
