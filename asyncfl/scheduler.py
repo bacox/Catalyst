@@ -171,124 +171,41 @@ class Scheduler:
         @TODO: Show that non-IID and skewed compute time are bad for the accuracy
         @TODO: Break BASGD with a frequency attack
         """
-        # print('Running without any tasks wrapper')
-        # print(f'Using position {position}')
         if not ct_clients:
             ct_clients = [1] * len(self.get_clients())
 
         interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds+1)
-        # print('Starting with every client joining to the server --> Get model')
 
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
-        # initial_weights = server.get_model_weights()
         initial_weights = flatten(server.network)
         model_age = server.get_age()
         for c in clients:
-            # c.set_weights(initial_weights, model_age)
             unflatten(c.network, initial_weights.detach().clone())
-            # c.set_weights(initial_weights, model_age)
 
         # To keep track of the metrics
         server_metrics = []
 
         # Play all the server interactions
-        # with tqdm() as bar:
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
             if update_id % 50 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client: Client = clients[client_id]
+
             client.move_to_gpu()
             client.train(num_batches=1)
-
-
-            # client_grad_data = client.get_gradients()
-            # new_model_weights = server.client_update(client.get_pid(), *client_grad_data)
-            # client.set_weights(new_model_weights, server.get_age())
-
-
-            # This works realy well!!
-            # c_model_weights = client.get_weights()
-            # server.set_weights(c_model_weights)
-            # new_model_weights = server.get_model_weights()
-            # client.set_weights(new_model_weights, server.get_age())
-
-
-            # New attempt by copying the buffers as well
-
-
-            # c_weights, c_buffers = client.get_weight_vectors()
-            # unflatten_b(server.network, c_buffers)
-
-            # unflatten(server.network, c_weights)
-
-
             c_gradients, c_buffers, age = client.get_gradient_vectors()
             unflatten_b(server.network, c_buffers)
             new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
             client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
-            # gc.collect()
-            # torch.cuda.empty_cache()
-
-
-            # Attempt to only use paramters and not state_dict
-            # c_param = client.network.parameters()
-
-            # for target_param, param in zip(server.network.parameters(), c_param):
-            #     target_param.data.copy_(param.data)
-
-            # for target_param, param in zip(client.network.parameters(), server.network.parameters()):
-            #     target_param.data.copy_(param.data)
-
-            # new_model_weights = server.get_model_weights()
-            # client.set_weights(new_model_weights, server.get_age())
-
-
-            # c_weights = flatten(client.network).detach().clone()
-            # s_weights = flatten(server.network).detach().clone()
-            # s_grad_flat = torch.zeros_like(c_weights)
-            # flatten_g(client.network, s_grad_flat)
-            # s_grad_flat = s_grad_flat.detach().clone()
-            # diff1 = c_weights - s_weights
-            # diff2 = s_weights - c_weights
-
-
-            # c_weights = client.get_weights()
-            # c_grad = torch.from_numpy(client.get_gradients()[0])
-            # cw_flat = flatten(client.network).detach()
-            # s_flat = flatten(server.network).detach()
-
-            # diff_flat = cw_flat - s_flat
-            # diff_flat2 = s_flat - cw_flat
-
-
-            # server.set_weights(c_weights)
-            # new_model_weights = server.get_model_weights()
-            # s2_flat = flatten(server.network)
-
-
-            # # grad_data = client.get_gradients()
-            # # c_weights = flatten(client.network)
-            # # s_weights = flatten(server.network)
-            # # t_grad_data = torch.from_numpy(grad_data[0])
-            # # dff = c_weights - s_weights
-            # # # c_grad = 
-            # # server.set_weights(c_weights)
-            # new_model_weights = server.client_update(client.get_pid(), *grad_data)
-            # # new_model_weights = server.get_model_weights()
-            # client.set_weights(new_model_weights, server.get_age())
-            # server.client_update(client)
-        # pbar.close()
-        # print(server_metrics)
 
         return server_metrics
 
         # Plot data
-
 
 
     def run_with_tasks_old(self):
@@ -327,9 +244,6 @@ class Scheduler:
         sched = Scheduler(**cfg)
         num_rounds = cfg['num_rounds']
         worker_id = int(current_process()._identity[0])
-        # print(f'Running task with workerID: {worker_id} <==>')
-        # print('')
-        # print(f'Starting run with name {cfg["name"]}', end='\r')
         return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
 
     @staticmethod
@@ -337,19 +251,8 @@ class Scheduler:
         outputs = []
         
         pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-        # pbar = tqdm(total=len(list_of_configs))
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
 
-        # for i in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs, progress_disabled=True)):
-        #     print(i)
-        # with Pool(pool_size) as p:
-        #     outputs = p.map(Scheduler.run_util, list_of_configs)
         return outputs
-        # for cfg in list_of_configs:
-        #     print(f'Running config: {cfg["name"]}')
-        #     num_rounds = cfg['num_rounds']
-        #     sched = Scheduler(**cfg)
-        #     server_metrics = sched.run_no_tasks(num_rounds)
-        #     outputs.append([server_metrics, cfg])
-        # return outputs
+

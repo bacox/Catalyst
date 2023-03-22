@@ -13,24 +13,23 @@ if __name__ == '__main__':
                         action="store_true")
     args = parser.parse_args()
 
-    print('Exp 0: This experiment is to run baselines. The model used is ResNet9 with the Cifar100 dataset. '
-          + 'Different number of clients are used: 50,25,10,5,1. The training is fully asynchronous SGD.')
+    print('Exp 2: This experiment is to show the difference between synchronous training and asynchronous training')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp00_base_check_epoch_lr'
+    exp_name = 'exp02_test'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
         # Define configurations
         configs = []
         f = 0  # number of byzantine clients
-        num_rounds = 50*10
+        num_rounds = 100
         idx = 1
         repetitions = 2
         limit = 10
         for _r in range(repetitions):
-            for n in [50, 25, 10, 5, 1]:
+            for n in [1]:
                 for model_name in ['cifar100-resnet9']:
                     configs.append({
                         'name': f'afl-{model_name}-cifar100-n{n}',
