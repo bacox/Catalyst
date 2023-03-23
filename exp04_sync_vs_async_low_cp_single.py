@@ -8,7 +8,6 @@ plt.ioff()
 import numpy as np
 from pathlib import Path
 import argparse
-import time
 # import torch
 # torch.multiprocessing.set_start_method('spawn', force=True)
 
@@ -18,15 +17,14 @@ if __name__ == '__main__':
                         action="store_true")
     args = parser.parse_args()
 
-    print('Exp 3: Async training with 20% client participation')
+    print('Exp 4: Async training with 100% client participation')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp03_low_client_participation'
+    exp_name = 'exp04_low_client_participation_single'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
-        start_time = time.time()
         outputs = []
         # Define configurations
         configs = []
@@ -36,7 +34,7 @@ if __name__ == '__main__':
         num_rounds = 1000
         idx = 1
         repetitions = 2
-        num_clients = [20, 10, 5]
+        num_clients = [50]
         for _r in range(repetitions):
             for n in num_clients:
                 for model_name in ['cifar100-resnet9']:
@@ -67,7 +65,7 @@ if __name__ == '__main__':
 
         # Run all experiments multithreaded
         # outputs = AFL.Scheduler.run_sync(configs)
-        outputs += AFL.Scheduler.run_multiple(configs, pool_size=2)
+        outputs += AFL.Scheduler.run_multiple(configs, pool_size=1)
 
         # Define configurations
         configs = []
@@ -117,9 +115,6 @@ if __name__ == '__main__':
         # Write raw data to file
         with open(data_file, 'w') as f:
             json.dump(outputs, f)
-        
-        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
-
 
     # Load raw data from file
     outputs2 = ''
