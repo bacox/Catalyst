@@ -190,8 +190,8 @@ class Scheduler:
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             gradients = []
             buffers = []
-            self.gradient_responses = [None] * num_clients
-            self.buffer_responses = [None] * num_clients
+            # self.gradient_responses = [None] * num_clients
+            # self.buffer_responses = [None] * num_clients
             update_counter += len(clients)
             training_processes = []
             for local_id, client in enumerate(selected_clients):
@@ -206,16 +206,16 @@ class Scheduler:
                 gradients.append(c_gradients)
                 buffers.append(c_buffers)
                 client.move_to_cpu()
-            [x.join() for x in training_processes]
+            # [x.join() for x in training_processes]
 
             # agv_gradient = np.mean(self.gradient_responses, axis=0)
             agv_gradient = np.mean(gradients, axis=0)
-            if not any(self.buffer_responses):
-                avg_buffers = []
-            else:
-                stacked = torch.stack(buffers)
-                # stacked = torch.stack(self.buffer_responses)
-                avg_buffers = torch.mean(stacked, dim=0)
+            # if not any(self.buffer_responses):
+            #     avg_buffers = []
+            # else:
+            stacked = torch.stack(buffers)
+            #     # stacked = torch.stack(self.buffer_responses)
+            avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
             new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, server.get_age())
             # new_model_weights_vector = server.get_model_weights()

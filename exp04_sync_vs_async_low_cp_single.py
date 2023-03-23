@@ -31,10 +31,10 @@ if __name__ == '__main__':
 
         # Shared configs:
         f = 0  # number of byzantine clients
-        num_rounds = 10
+        num_rounds = 1000
         idx = 1
         repetitions = 2
-        num_clients = [50]
+        num_clients = [50, 25, 10, 5]
         for _r in range(repetitions):
             for n in num_clients:
                 for model_name in ['cifar100-resnet9']:
