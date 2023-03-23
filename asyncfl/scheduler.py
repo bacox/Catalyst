@@ -278,9 +278,11 @@ class Scheduler:
 
         # Plot data
 
-
     def run_with_tasks_old(self):
-
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         # Create task list
         tasks = []
         task: Task = Task(self.get_clients()[0], Client.get_pid)
@@ -338,6 +340,10 @@ class Scheduler:
 
     @staticmethod 
     def run_util_sync(cfg):
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         sched = Scheduler(**cfg)
         num_rounds = cfg['num_rounds']
         # worker_id = int(current_process()._identity[0])
@@ -348,6 +354,10 @@ class Scheduler:
 
     @staticmethod
     def run_sync(list_of_configs, pool_size=5):
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         return [Scheduler.run_util_sync(cfg) for cfg in tqdm(list_of_configs, total=len(list_of_configs), position=0, leave=None, desc='Total')]
         # return [Scheduler.run_util_sync(cfg) for cfg in list_of_configs]
 

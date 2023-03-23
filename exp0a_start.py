@@ -3,6 +3,8 @@ import asyncfl as AFL
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+# Turn interactive plotting off
+plt.ioff()
 import numpy as np
 from pathlib import Path
 import argparse
@@ -27,7 +29,7 @@ if __name__ == '__main__':
         dataset = 'mnist'
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
-        num_rounds = 100
+        num_rounds = 10
         idx = 1
         repetitions = 2
         limit = 10
@@ -116,11 +118,11 @@ if __name__ == '__main__':
 
     graph_file = graphs_path / f'{exp_name}.png'
     # Visualize data
-    plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(8, 6))
     g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
     plt.title('Different number of clients in async Learning. Cifar100 - ResNet9')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
     plt.savefig(graph_file)
-    plt.show()
+    plt.close(fig)
