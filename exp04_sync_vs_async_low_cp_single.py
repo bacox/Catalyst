@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp04_low_client_participation_single'
+    exp_name = 'exp04_low_client_participation_single_test_remove_afterwards'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -31,7 +31,7 @@ if __name__ == '__main__':
 
         # Shared configs:
         f = 0  # number of byzantine clients
-        num_rounds = 1000
+        num_rounds = 10
         idx = 1
         repetitions = 2
         num_clients = [50]
@@ -39,7 +39,7 @@ if __name__ == '__main__':
             for n in num_clients:
                 for model_name in ['cifar100-resnet9']:
                     configs.append({
-                        'aggregation_type': 'asynchronous',
+                        'aggregation_type': 'async',
                         'name': f'afl-{model_name}-cifar100-n{n}_async',
                         'num_rounds': num_rounds,
                         'clients': {
@@ -62,21 +62,12 @@ if __name__ == '__main__':
                         'dataset_name': 'cifar100',
                         'model_name': model_name
                     })
-
-        # Run all experiments multithreaded
-        # outputs = AFL.Scheduler.run_sync(configs)
-        outputs += AFL.Scheduler.run_multiple(configs, pool_size=1)
-
-        # Define configurations
-        configs = []
         for _r in range(repetitions):
-            # for n in [50, 25, 10, 2]:
-            # for n in [10, 5, 2, 1]:
             for n in num_clients:
                 for model_name in ['cifar100-resnet9']:
                     configs.append({
                         'client_participartion': 0.2,
-                        'aggregation_type': 'synchronous',
+                        'aggregation_type': 'sync',
                         'name': f'afl-{model_name}-cifar100-n{n}_sync',
                         'num_rounds': num_rounds,
                         'clients': {
@@ -101,8 +92,11 @@ if __name__ == '__main__':
                     })
 
         # Run all experiments multithreaded
-        outputs += AFL.Scheduler.run_sync(configs)
-
+        # outputs = AFL.Scheduler.run_sync(configs)
+        # first_cfg = configs[0]
+        # configs[0] = configs[-1]
+        # configs[-1] = configs
+        outputs += AFL.Scheduler.run_multiple(configs, pool_size=1)
         
 
         # Replace class names with strings for serialization
