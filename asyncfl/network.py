@@ -56,7 +56,9 @@ def flatten_b(model):
     vec = []
     for param in model.buffers():
         vec.append(param.data.view(-1))
-    return torch.cat(vec)
+    if vec:
+        return torch.cat(vec)
+    return vec
 
 
 def unflatten_b(model, vec):

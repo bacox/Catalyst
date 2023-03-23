@@ -163,6 +163,15 @@ class Scheduler:
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
+
+        def train_client(self, client: Client, local_id, num_batches=-1):
+            client.move_to_gpu()
+            client.train(num_batches=num_batches)
+            c_gradients, c_buffers, age = client.get_gradient_vectors()
+            self.gradient_responses[local_id] = c_gradients
+            self.buffer_responses[local_id] = c_buffers
+            client.move_to_cpu()
+
         initial_weights = flatten(server.network)
         model_age = server.get_age()
         for c in clients:
@@ -170,7 +179,7 @@ class Scheduler:
 
         server_metrics = []
         update_counter = 0
-        for idx_, update_id in enumerate(pbar:= tqdm(range(num_rounds), position=position, leave=None)):
+        for idx_, update_id in enumerate(pbar:= tqdm(range(num_rounds+1), position=position, leave=None)):
             # print(f'Round {update_id}')
             num_clients = int(np.max([1, np.floor(float(len(clients))*client_participation)]))
             selected_clients = np.random.choice(clients, num_clients, replace=False)
@@ -181,19 +190,34 @@ class Scheduler:
                 pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             gradients = []
             buffers = []
+            self.gradient_responses = [None] * num_clients
+            self.buffer_responses = [None] * num_clients
             update_counter += len(clients)
-            for client in selected_clients:
+            training_processes = []
+            for local_id, client in enumerate(selected_clients):
+                # p = Thread(target=train_client, args=(self, client, local_id, 1))
+                # p.start()
+                # # print(f'Client {local_id} started')
+                # training_processes.append(p)
+                # train_client(self, client, local_id, 1)
                 client.move_to_gpu()
                 client.train(num_batches=1)
                 c_gradients, c_buffers, age = client.get_gradient_vectors()
                 gradients.append(c_gradients)
                 buffers.append(c_buffers)
                 client.move_to_cpu()
+            [x.join() for x in training_processes]
 
+            # agv_gradient = np.mean(self.gradient_responses, axis=0)
             agv_gradient = np.mean(gradients, axis=0)
-            avg_buffers = torch.mean(torch.stack(buffers), dim=0)
+            if not any(self.buffer_responses):
+                avg_buffers = []
+            else:
+                stacked = torch.stack(buffers)
+                # stacked = torch.stack(self.buffer_responses)
+                avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, age)
+            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, server.get_age())
             # new_model_weights_vector = server.get_model_weights()
             for client in clients:
                 client.move_to_gpu()
@@ -290,8 +314,17 @@ class Scheduler:
     def run_util(cfg):
         sched = Scheduler(**cfg)
         num_rounds = cfg['num_rounds']
-        worker_id = int(current_process()._identity[0])
-        return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+        if 'aggregation_type' in cfg and cfg['aggregation_type'] == 'sync':
+            # Run synchronous scheduler
+            worker_id = 1
+            cfg['client_participartion'] = cfg.get('client_participartion', 1.0)
+            # print('Running SYNC scheduler')
+            return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
+        else:
+            # Default: Run asyn scheduler
+            # print('Running ASYNC scheduler')
+            worker_id = int(current_process()._identity[0])
+            return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5):

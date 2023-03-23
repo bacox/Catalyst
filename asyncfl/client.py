@@ -105,6 +105,7 @@ class Client:
         self.g_flat = torch.zeros_like(self.w_flat)
         self.optimizer.zero_grad()
         for batch_idx, (inputs, labels) in enumerate(self.train_set):
+            # print(f'[Client{self.pid}]:: {batch_idx}')
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             self.optimizer.zero_grad()
             outputs = self.network(inputs)
