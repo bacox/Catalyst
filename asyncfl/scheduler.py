@@ -16,6 +16,7 @@ from .server import Server
 from .client import Client
 from .task import Task
 import numpy as np
+import time
 import gc
 import asyncio
 import random
@@ -373,17 +374,17 @@ class Scheduler:
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5):
-        outputs = []
-        
+        start_time = time.time()        
+        outputs = []        
         pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
-
+        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return outputs
 
     @staticmethod
     def run_pm(list_of_configs, pool_size=5):
-        # outputs = []
+        start_time = time.time()        
         pm = PoolManager(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
         pbar = tqdm(total=len(list_of_configs), position=0, leave=None, desc='Total')
         for cfg in list_of_configs:
@@ -391,7 +392,9 @@ class Scheduler:
             pm.add_task(Scheduler.run_util, [cfg], cfg['task_cap'])
         
         pm.run(pbar=pbar)
-        return [x.get() for x in pm.get_results()]
+        results = [x.get() for x in pm.get_results()]
+        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        return results
 
 
     @staticmethod 
