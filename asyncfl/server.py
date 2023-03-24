@@ -8,16 +8,18 @@ from .network import get_model_by_name, model_gradients, flatten, unflatten_g
 
 class Server:
 
-    def __init__(self, dataset: str, model_name: str) -> None:
+    def __init__(self, dataset: str, model_name: str, learning_rate: float = 0.005) -> None:
         self.g_flat = None
         self.clients = []
         self.dataset_name = dataset
-        self.train_set, self.test_set = afl_dataset(
-            self.dataset_name, use_iter=False, client_id=0, n_clients=1)
+        self.test_set = afl_dataset(
+            self.dataset_name, use_iter=False, client_id=0, n_clients=1, data_type='test')
         self.device = torch.device(
             'cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = get_model_by_name(model_name).to(self.device)
-        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=0.005)
+        self.learning_rate = learning_rate
+        # @TODO: Set learning rate dynamic
+        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.learning_rate)
         self.w_flat = flatten(self.network)
         self.age = 0
 

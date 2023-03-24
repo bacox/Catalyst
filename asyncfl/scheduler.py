@@ -66,6 +66,8 @@ class Scheduler:
         self.clients: List[Client] = []
         self.entities = {}
         self.compute_times = {}
+        if 'learning_rate' not in config['server_args']:
+            config['server_args']['learning_rate'] = 0.005
         self.entities['server'] = config['server'](dataset_name, model_name, **config['server_args'])
         self.create_entities(**config)
 

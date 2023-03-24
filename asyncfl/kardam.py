@@ -37,8 +37,8 @@ class Kardam(Server):
     * Dampening filter
     * Frequency filter
     """
-    def __init__(self, dataset: str, model_name: str, damp_alpha: float = 0.2) -> None:
-        super().__init__(dataset, model_name)
+    def __init__(self, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2) -> None:
+        super().__init__(dataset, model_name, learning_rate)
         self.damp_alpha = damp_alpha
 
     

@@ -12,11 +12,12 @@ class Client:
 
         self.pid = pid
         self.dataset_name = dataset_name
-        self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
+        self.train_set = afl_dataset(dataset_name, use_iter=True, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.network = MNIST_CNN().to(self.device)
         # self.network = get_model_by_name(model_name).to(self.device)
+        return
         self.network = get_model_by_name(model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
         self.lr = 0.005
