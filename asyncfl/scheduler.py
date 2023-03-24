@@ -251,9 +251,12 @@ class Scheduler:
             # if not any(self.buffer_responses):
             #     avg_buffers = []
             # else:
-            stacked = torch.stack(buffers)
+            if buffers[0] == []:
+                avg_buffers = []
+            else:
+                stacked = torch.stack(buffers)
             #     # stacked = torch.stack(self.buffer_responses)
-            avg_buffers = torch.mean(stacked, dim=0)
+                avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
             new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, server.get_age())
             # new_model_weights_vector = server.get_model_weights()
