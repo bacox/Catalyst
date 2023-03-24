@@ -17,14 +17,14 @@ if __name__ == '__main__':
                         action="store_true")
     args = parser.parse_args()
 
-    print('Exp 4: Async training with 100% client participation')
+    print('Exp 6: Async training with 100% client participation')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp04_low_client_participation_single_test_remove_afterwards'
+    exp_name = 'exp06_low_client_participation_single_data_used'
     data_file = data_path / f'{exp_name}.json'
 
-    if not args.o and False:
+    if not args.o:
         outputs = []
         # Define configurations
         configs = []
