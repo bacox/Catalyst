@@ -1,6 +1,7 @@
 #
 # from .server import Server
 from multiprocessing import Pool, current_process, RLock, Process
+from multiprocessing.pool import AsyncResult
 from typing import List
 import torch
 from tqdm.auto import tqdm
@@ -19,8 +20,45 @@ import gc
 import asyncio
 import random
 from threading import Thread
-class Scheduler:
 
+
+class PoolManager():
+
+    def __init__(self, processes=None, initializer=None, initargs=(),
+                 maxtasksperchild=None, context=None) -> None:
+        self.pool = Pool(processes, initializer, initargs, maxtasksperchild)
+        self.tasks = []
+        self.active_tasks = []
+        self.results = []
+        self.num_processes = processes
+        self.capacity = 1.0
+
+    def add_task(self, func, args, required_capacity: float = 0.0):
+        self.tasks.append((func, args, required_capacity))
+    
+    def run(self, pbar=None):
+        while len(self.tasks) or len(self.active_tasks) > 0:
+
+            if self.tasks and self.capacity >= self.tasks[-1][2]:
+                func, args, cap = self.tasks.pop()
+                self.capacity -= cap
+                # print(f'New Cap {self.capacity}')
+                self.active_tasks.append((self.pool.apply_async(func, args), cap))
+            
+            for index, (t, cap) in enumerate(self.active_tasks):
+                if t.ready():
+                    self.results.append(t)
+                    self.active_tasks.pop(index)
+                    self.capacity += cap
+                    # print(f'Cap restore {self.capacity}')
+                    if pbar:
+                         pbar.update(1)
+
+    def get_results(self) -> List[AsyncResult]:
+        return self.results
+    
+
+class Scheduler:
     def __init__(self, dataset_name: str, model_name: str, **config):
         self.dataset_name = dataset_name
         self.model_name = model_name
@@ -318,7 +356,9 @@ class Scheduler:
         num_rounds = cfg['num_rounds']
         if 'aggregation_type' in cfg and cfg['aggregation_type'] == 'sync':
             # Run synchronous scheduler
-            worker_id = 1
+            worker_id = int(current_process()._identity[0])
+
+            # worker_id = 1
             cfg['client_participartion'] = cfg.get('client_participartion', 1.0)
             # print('Running SYNC scheduler')
             return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
@@ -337,6 +377,19 @@ class Scheduler:
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
 
         return outputs
+
+    @staticmethod
+    def run_pm(list_of_configs, pool_size=5):
+        # outputs = []
+        pm = PoolManager(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        pbar = tqdm(total=len(list_of_configs), position=0, leave=None, desc='Total')
+        for cfg in list_of_configs:
+            cfg['task_cap'] = cfg.get('task_cap', 1.0/pool_size)
+            pm.add_task(Scheduler.run_util, [cfg], cfg['task_cap'])
+        
+        pm.run(pbar=pbar)
+        return [x.get() for x in pm.get_results()]
+
 
     @staticmethod 
     def run_util_sync(cfg):
