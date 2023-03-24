@@ -24,7 +24,7 @@ if __name__ == '__main__':
     exp_name = 'exp04_low_client_participation_single_test_remove_afterwards'
     data_file = data_path / f'{exp_name}.json'
 
-    if not args.o and False:
+    if not args.o:
         outputs = []
         # Define configurations
         configs = []

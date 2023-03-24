@@ -35,13 +35,15 @@ if __name__ == '__main__':
         idx = 1
         repetitions = 2
         num_clients = [50, 25, 10, 5]
+        caps =        [1.0, 0.5, 0.25, 0.25]
         for _r in range(repetitions):
-            for n in num_clients:
+            for n, cap in zip(num_clients, caps):
                 for model_name in ['cifar100-resnet9']:
                     configs.append({
+                        'task_cap': cap,
                         'aggregation_type': 'async',
                         'name': f'afl-{model_name}-cifar100-n{n}_async',
-                        'num_rounds': num_rounds,
+                        'num_rounds': num_rounds*5,
                         'clients': {
                                 'client': AFL.Client,
                                 'client_args': {
@@ -62,10 +64,8 @@ if __name__ == '__main__':
                         'dataset_name': 'cifar100',
                         'model_name': model_name
                     })
-        for _r in range(repetitions):
-            for n in num_clients:
-                for model_name in ['cifar100-resnet9']:
                     configs.append({
+                        'task_cap': cap,
                         'client_participartion': 0.2,
                         'aggregation_type': 'sync',
                         'name': f'afl-{model_name}-cifar100-n{n}_sync',
@@ -96,7 +96,8 @@ if __name__ == '__main__':
         # first_cfg = configs[0]
         # configs[0] = configs[-1]
         # configs[-1] = configs
-        outputs += AFL.Scheduler.run_multiple(configs, pool_size=1)
+        # outputs += AFL.Scheduler.run_multiple(configs, pool_size=1)
+        outputs = AFL.Scheduler.run_pm(configs, pool_size=4)
         
 
         # Replace class names with strings for serialization
@@ -154,4 +155,3 @@ if __name__ == '__main__':
     g.legend_.set_title(None)
     plt.savefig(graph_file2)
     plt.close(fig)
-    # plt.show()
