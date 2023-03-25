@@ -1,3 +1,6 @@
+import argparse
+from pathlib import Path
+import numpy as np
 import json
 import asyncfl as AFL
 import seaborn as sns
@@ -5,14 +8,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 # Turn interactive plotting off
 plt.ioff()
-import numpy as np
-from pathlib import Path
-import argparse
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "-omit", help="Omit running experiment",
                         action="store_true")
+    parser.add_argument('-a', '--autocomplete',
+                        help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
     print('Exp 0a: Minimal running example to test the system.')
@@ -34,11 +36,14 @@ if __name__ == '__main__':
         repetitions = 2
         limit = 10
         num_clients = [50]
+        exp_id = 0
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
                 for model_name in model_list:
+                    exp_id += 1
                     configs.append({
+                        'exp_id': exp_id,
                         'aggregation_type': 'sync',
                         'client_participartion': 0.2,
                         'name': f'afl-{model_name}-{dataset}-n{n}_sync',
@@ -63,7 +68,9 @@ if __name__ == '__main__':
                         'dataset_name': dataset,
                         'model_name': model_name
                     })
+                    exp_id += 1
                     configs.append({
+                        'exp_id': exp_id,
                         'aggregation_type': 'async',
                         'client_participartion': 0.2,
                         'name': f'afl-{model_name}-{dataset}-n{n}_async',
@@ -90,6 +97,16 @@ if __name__ == '__main__':
                     })
 
         # Run all experiments multithreaded
+        completed_runs = []
+        if args.autocomplete:
+            print('Running mising experiments:')
+            with open(data_file, 'r') as f:
+                completed_runs = json.load(f)
+                keys = [x[1]['exp_id'] for x in completed_runs]
+                configs = [x for x in configs if x['exp_id'] not in keys]
+                # @TODO: Append to output instead of overwriting
+                # print(configs)
+            # exit()
         outputs = AFL.Scheduler.run_multiple(configs, pool_size=2)
 
         # Replace class names with strings for serialization
@@ -99,6 +116,7 @@ if __name__ == '__main__':
             i[1]['server'] = i[1]['server'].__name__
 
         # Write raw data to file
+        outputs += completed_runs
         with open(data_file, 'w') as f:
             json.dump(outputs, f)
 

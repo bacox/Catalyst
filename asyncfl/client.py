@@ -3,27 +3,29 @@ from typing import List
 
 import torch
 import numpy as np
-from .dataloader import afl_dataset
+from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
 
 
 class Client:
-    def __init__(self, pid, num_clients, dataset_name: str, model_name: str, sampler, sampler_args={}) -> None:
+    def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005) -> None:
 
         self.pid = pid
-        self.dataset_name = dataset_name
-        self.train_set, self.test_set = afl_dataset(dataset_name, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
+        self.train_set = afl_dataloader(dataset, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
+        # self.train_set = afl_dataset(dataset_name, use_iter=True, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         # self.network = MNIST_CNN().to(self.device)
         # self.network = get_model_by_name(model_name).to(self.device)
+        # return
         self.network = get_model_by_name(model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
-        self.lr = 0.005
+        self.lr = learning_rate
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.lr, momentum=0.5)
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
+        # print(f'Client {self.pid} has {len(self.train_set)} data samples to train')
 
     def get_pid(self):
         # print(f'My PID is: {self.pid}')
