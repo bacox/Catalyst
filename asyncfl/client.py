@@ -8,7 +8,7 @@ from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, f
 
 
 class Client:
-    def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}) -> None:
+    def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005) -> None:
 
         self.pid = pid
         self.train_set = afl_dataloader(dataset, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
@@ -20,7 +20,7 @@ class Client:
         # return
         self.network = get_model_by_name(model_name)
         self.loss_function = torch.nn.CrossEntropyLoss()
-        self.lr = 0.005
+        self.lr = learning_rate
         self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.lr, momentum=0.5)
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)

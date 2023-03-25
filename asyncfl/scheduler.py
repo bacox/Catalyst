@@ -38,7 +38,7 @@ class PoolManager():
 
     def add_task(self, func, args, required_capacity: float = 0.0):
         self.tasks.append((func, args, required_capacity))
-    
+
     def run(self, pbar=None):
         while len(self.tasks) or len(self.active_tasks) > 0:
 
@@ -46,8 +46,9 @@ class PoolManager():
                 func, args, cap = self.tasks.pop()
                 self.capacity -= cap
                 # print(f'New Cap {self.capacity}')
-                self.active_tasks.append((self.pool.apply_async(func, args), cap))
-            
+                self.active_tasks.append(
+                    (self.pool.apply_async(func, args), cap))
+
             for index, (t, cap) in enumerate(self.active_tasks):
                 if t.ready():
                     self.results.append(t)
@@ -55,11 +56,11 @@ class PoolManager():
                     self.capacity += cap
                     # print(f'Cap restore {self.capacity}')
                     if pbar:
-                         pbar.update(1)
+                        pbar.update(1)
 
     def get_results(self) -> List[AsyncResult]:
         return self.results
-    
+
 
 class Scheduler:
     def __init__(self, dataset_name: str, model_name: str, **config):
@@ -70,106 +71,41 @@ class Scheduler:
         self.compute_times = {}
         if 'learning_rate' not in config['server_args']:
             config['server_args']['learning_rate'] = 0.005
-        
         self.create_entities(**config)
         self.dataset = None
-
-    # def __init__(self, server_class, client_class, num_clients, dataset_name: str, config = None, server_args = {}, client_args = {}):
-    #
-    #
-    #     # self.server = server_class(dataset_name)
-    #     self.dataset_name = dataset_name
-    #
-    #
-    #
-    #     self.clients: List[Client] = []
-    #     # self.create_entities(client_class, num_clients, config)
-    #
-    #     self.entities = {}
-    #     self.entities['server'] = config['server'](dataset_name, **config['server_args'])
-    #
-    #     # Create benign clients
-    #     self.create_entities(client_class, num_clients, config, client_args)
-    #
-    #     # Create Byzantine clients
-    #     self.create_entities(client_class, num_clients, config, client_args)
 
     def create_entities(self, clients, **config):
         n = clients['n']
         f = clients['f']
-        # Create normal workers
-        # client_data = [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']] + [(x, clients['client'], clients['client_args']) for x in clients['client_ct']]
-        client_data = [(x, clients['client'], clients['client_args']) for x in clients['client_ct']] + [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']]
+        client_data = [(x, clients['client'], clients['client_args']) for x in clients['client_ct']
+                       ] + [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']]
         num_clients = len(client_data)
 
-        # self.train_set = afl_dataset(dataset_name, use_iter=True, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         self.train_set = afl_dataset2(self.dataset_name,  data_type="train")
         self.test_set = afl_dataset2(self.dataset_name,  data_type="test")
-        self.entities['server'] = config['server'](self.test_set, self.model_name, **config['server_args'])
+        self.entities['server'] = config['server'](
+            self.test_set, self.model_name, **config['server_args'])
 
-        # @TODO:: Move dataset split to here!
         def create_client(self, pid, c_ct, client_class, client_args):
             node_id = f'c_{pid}'
-            # print(f'Starting node: {node_id}')
-            self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            self.entities[node_id] = client_class(
+                pid, num_clients, self.train_set, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
-        
-        # async def create_all_clients(self, client_data):
-        #     # print('All gather ')
-        #     await asyncio.gather(*[create_client(self, pid, *c_args) for (pid, c_args) in enumerate(client_data)])
-        
 
         def create_client_aux(self, pid, c_args):
-            p = Thread(target=create_client, args=(self, pid, *c_args), daemon=False)
+            p = Thread(target=create_client, args=(
+                self, pid, *c_args), daemon=False)
             # p.daemon = False
             p.start()
-            return p        
+            return p
         loading_processes = []
         for pid, (c_ct, client_class, client_args) in enumerate(client_data):
             # print(pid, c_ct, client_class, client_args)
             node_id = f'c_{pid}'
-            loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
+            loading_processes.append(create_client_aux(
+                self, pid, (c_ct, client_class, client_args)))
 
         [x.join() for x in loading_processes]
-
-            # self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
-            # self.compute_times[pid] = c_ct
-
-        # with Pool(5) as pp:
-        #     pp.ma(create_client, )
-        # pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-        # # pbar = tqdm(total=len(list_of_configs))
-        # # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
-        # outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
-
-        # asyncio.run(create_all_clients(self, client_data))
-
-        # for pid, (c_ct, client_class, client_args) in enumerate(client_data):
-        #     # print(pid, c_ct, client_class, client_args)
-        #     node_id = f'c_{pid}'
-        #     self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
-        #     self.compute_times[pid] = c_ct
-
-    # def create_entities(self, client_class, n, config = None, client_args = {}):
-    #     """
-    #     Client class A
-    #     Client class F
-    #     N
-    #     F
-    #     Client A Args
-    #     Client F Args
-    #     Compute times clients A
-    #     Compute times clients F
-    #     """
-    #     compute_times = []
-    #     if (not config):
-    #         compute_times = [[x, 1] for x in range(n)]
-    #     print(compute_times)
-    #
-    #     for pid, ct in compute_times:
-    #         self.entities[f'c_{pid}'] = client_class(pid, self.dataset_name, **client_args)
-    #         # self.clients.append(client_class(pid, self.dataset_name))
-    #     # print(self.clients)
 
     def get_server(self):
         return self.entities['server']
@@ -177,10 +113,8 @@ class Scheduler:
     def get_clients(self):
         return [item for (key, item) in self.entities.items() if key != 'server']
 
-
     def dereference(self, e_id):
         return self.entities[e_id]
-
 
     def compute_interaction_sequence(self, ct_data, num_rounds):
         def create_mock_client(_id, ct):
@@ -190,7 +124,8 @@ class Scheduler:
                 'ct_left': ct,
             }
 
-        clients = [create_mock_client(idx, c_ct) for (idx, c_ct) in ct_data.items()]
+        clients = [create_mock_client(idx, c_ct)
+                   for (idx, c_ct) in ct_data.items()]
         sequence = []
         for _round in range(num_rounds):
             rc = min(clients, key=lambda x: x['ct_left'])
@@ -207,11 +142,10 @@ class Scheduler:
             rc['ct_left'] = rc['ct']
             clients[rc['_id']] = rc
         return sequence
-    
-    def run_sync_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr='', client_participation=1.0):
+
+    def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr='', client_participation=1.0):
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
-
 
         def train_client(self, client: Client, local_id, num_batches=-1):
             client.move_to_gpu()
@@ -228,27 +162,25 @@ class Scheduler:
 
         server_metrics = []
         update_counter = 0
-        for idx_, update_id in enumerate(pbar:= tqdm(range(num_rounds+1), position=position, leave=None)):
+        for idx_, update_id in enumerate(pbar := tqdm(range(num_rounds+1), position=position, leave=None)):
             # print(f'Round {update_id}')
-            num_clients = int(np.max([1, np.floor(float(len(clients))*client_participation)]))
-            selected_clients = np.random.choice(clients, num_clients, replace=False)
+            num_clients = int(
+                np.max([1, np.floor(float(len(clients))*client_participation)]))
+            selected_clients = np.random.choice(
+                clients, num_clients, replace=False)
             # print(f'Client participation: {num_clients}')
             if update_id % 5 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
+                pbar.set_description(
+                    f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             gradients = []
             buffers = []
-            # self.gradient_responses = [None] * num_clients
-            # self.buffer_responses = [None] * num_clients
+
             update_counter += len(clients)
             training_processes = []
             for local_id, client in enumerate(selected_clients):
-                # p = Thread(target=train_client, args=(self, client, local_id, 1))
-                # p.start()
-                # # print(f'Client {local_id} started')
-                # training_processes.append(p)
-                # train_client(self, client, local_id, 1)
+
                 client.move_to_gpu()
                 client.train(num_batches=1)
                 c_gradients, c_buffers, age = client.get_gradient_vectors()
@@ -269,21 +201,22 @@ class Scheduler:
             #     # stacked = torch.stack(self.buffer_responses)
                 avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, server.get_age())
+            new_model_weights_vector = server.client_update(
+                client.get_pid(), agv_gradient, server.get_age())
             # new_model_weights_vector = server.get_model_weights()
             for client in clients:
                 client.move_to_gpu()
-                client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+                client.set_weight_vectors(
+                    new_model_weights_vector.cpu().numpy(), server.get_age())
                 client.move_to_cpu()
 
                 # unflatten_b(server.network, c_buffers)
                 # new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
                 # client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
                 # client.move_to_cpu()
-        return server_metrics
+        return server_metrics, []
 
-
-    def run_no_tasks(self, num_rounds, ct_clients = [], progress_disabled = False, position=0, add_descr=''):
+    def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=''):
         """
         @TODO: Put dict of interaction sequence as argument
         @TODO: Save participation statistics of the clients and plot this in a graph.
@@ -296,7 +229,8 @@ class Scheduler:
         if not ct_clients:
             ct_clients = [1] * len(self.get_clients())
 
-        interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds+1)
+        interaction_sequence = self.compute_interaction_sequence(
+            self.compute_times, num_rounds+1)
 
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
@@ -308,25 +242,35 @@ class Scheduler:
 
         # To keep track of the metrics
         server_metrics = []
+        model_age_stats = []
 
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
 
-            if update_id % 5 == 0:
+            if update_id % 50 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
+                pbar.set_description(
+                    f'{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}')
             client: Client = clients[client_id]
 
             client.move_to_gpu()
             client.train(num_batches=1)
             c_gradients, c_buffers, age = client.get_gradient_vectors()
+            server.incr_age()
+            gradient_age = server.get_age() - age
+            # if gradient_age == 0:
+            #     print('No')
+            # print(f'Gradient age: {server.get_age()}-{age}={gradient_age}')
+            model_age_stats.append([update_id, client.pid, gradient_age])
             unflatten_b(server.network, c_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
-            client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
+            new_model_weights_vector = server.client_update(
+                client.get_pid(), c_gradients, age)
+            client.set_weight_vectors(
+                new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
 
-        return server_metrics
+        return server_metrics, model_age_stats
 
         # Plot data
 
@@ -339,13 +283,17 @@ class Scheduler:
         tasks = []
         task: Task = Task(self.get_clients()[0], Client.get_pid)
         task()
-        t2 = Task(self.get_clients()[-1], Client.print_pid_and_var, "hello world")
+        t2 = Task(self.get_clients()[-1],
+                  Client.print_pid_and_var, "hello world")
         t2()
-        t3 = Task(self.get_clients()[0], Client.train, self.get_clients()[0].get_weights())
-        t_c1_join = Task(self.get_server(), Server.client_join, self.get_clients()[0])
+        t3 = Task(self.get_clients()[0], Client.train,
+                  self.get_clients()[0].get_weights())
+        t_c1_join = Task(self.get_server(), Server.client_join,
+                         self.get_clients()[0])
         t_c1_train = Task(self.get_clients()[0], Client.train)
-        t_c1_update = Task(self.get_server(), Server.client_update, self.get_clients()[0])
-        tasks = [t_c1_join]+ [t_c1_train, t_c1_update]*1000
+        t_c1_update = Task(self.get_server(),
+                           Server.client_update, self.get_clients()[0])
+        tasks = [t_c1_join] + [t_c1_train, t_c1_update]*1000
         for t in tasks:
             t()
         for c in self.server.clients:
@@ -364,7 +312,7 @@ class Scheduler:
         # for c in self.clients:
         #     c.train()
 
-    @staticmethod 
+    @staticmethod
     def run_util(cfg):
         sched = Scheduler(**cfg)
         num_rounds = cfg['num_rounds']
@@ -373,7 +321,8 @@ class Scheduler:
             worker_id = int(current_process()._identity[0])
 
             # worker_id = 1
-            cfg['client_participartion'] = cfg.get('client_participartion', 1.0)
+            cfg['client_participartion'] = cfg.get(
+                'client_participartion', 1.0)
             # print('Running SYNC scheduler')
             return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
         else:
@@ -384,30 +333,35 @@ class Scheduler:
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5):
-        start_time = time.time()        
-        outputs = []        
-        pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+        start_time = time.time()
+        outputs = []
+        pool = Pool(pool_size, initializer=tqdm.set_lock,
+                    initargs=(tqdm.get_lock(),))
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
-        outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(list_of_configs), position=0, leave=None, desc='Total')]
-        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(
+            list_of_configs), position=0, leave=None, desc='Total')]
+        print(
+            f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return outputs
 
     @staticmethod
     def run_pm(list_of_configs, pool_size=5):
-        start_time = time.time()        
-        pm = PoolManager(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-        pbar = tqdm(total=len(list_of_configs), position=0, leave=None, desc='Total')
+        start_time = time.time()
+        pm = PoolManager(pool_size, initializer=tqdm.set_lock,
+                         initargs=(tqdm.get_lock(),))
+        pbar = tqdm(total=len(list_of_configs),
+                    position=0, leave=None, desc='Total')
         for cfg in list_of_configs:
             cfg['task_cap'] = cfg.get('task_cap', 1.0/pool_size)
             pm.add_task(Scheduler.run_util, [cfg], cfg['task_cap'])
-        
+
         pm.run(pbar=pbar)
         results = [x.get() for x in pm.get_results()]
-        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        print(
+            f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return results
 
-
-    @staticmethod 
+    @staticmethod
     def run_util_sync(cfg):
         """
         Deprecated function

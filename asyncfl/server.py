@@ -46,6 +46,9 @@ class Server:
     def get_age(self):
         return self.age
 
+    def incr_age(self):
+        self.age += 1
+
     def client_update(self, _client_id: int, gradients: np.ndarray, gradient_age: int):
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
@@ -82,7 +85,6 @@ class Server:
         """
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
-        self.age += 1
 
     def evaluate_accuracy(self):
         self.network.eval()
