@@ -28,16 +28,16 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
         configs = []
-        model_list = ['cifar10-lenet']
-        dataset = 'cifar10'
+        model_list = ['cifar100-lenet']
+        dataset = 'cifar100'
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
         num_rounds = 500
         idx = 1
-        repetitions = 1
+        repetitions = 2
         limit = 10
         # num_clients = [50]
-        num_clients = [25]
+        num_clients = [10]
         exp_id = 0
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
@@ -84,43 +84,28 @@ if __name__ == '__main__':
 
         
 
-        import torchvision
-        import torch
+        # import torchvision
+        # import torch
 
-        trainset = torchvision.datasets.CIFAR10(root='~/data', train=True,
-                                                download=True, transform=None)
-
-        odds1 = list(range(0, len(trainset), 5))
-        odds2 = list(range(1, len(trainset), 5))
-        odds3 = list(range(2, len(trainset), 5))
-        odds4 = list(range(3, len(trainset), 5))
-        odds5 = list(range(4, len(trainset), 5))
-        trainset_1 = torch.utils.data.Subset(trainset, odds1)
-        trainset_2 = torch.utils.data.Subset(trainset, odds2)
-        trainset_3 = torch.utils.data.Subset(trainset, odds3)
-        trainset_4 = torch.utils.data.Subset(trainset, odds4)
-        trainset_5 = torch.utils.data.Subset(trainset, odds5)
-        # trainset_2 = torch.utils.data.Subset(trainset, odds)
-
-        trainloader_1 = torch.utils.data.DataLoader(trainset_1, batch_size=4,
-                                                    shuffle=True, num_workers=2)
-        trainloader_2 = torch.utils.data.DataLoader(trainset_2, batch_size=4,
-                                                    shuffle=True, num_workers=2)
-        trainloader_3 = torch.utils.data.DataLoader(trainset_3, batch_size=4,
-                                                   shuffle=True, num_workers=2)
-        trainloader_4 = torch.utils.data.DataLoader(trainset_4, batch_size=4,
-                                                    shuffle=True, num_workers=2)
-        trainloader_5 = torch.utils.data.DataLoader(trainset_5, batch_size=4,
-                                                    shuffle=True, num_workers=2)
         
+        # nums = 250
+        # loaders = []
+        # for i in range(nums):
+        #     trainset = torchvision.datasets.CIFAR10(root='~/data', train=True,
+        #                                         download=True, transform=None)
+        #     odds = list(range(0, len(trainset), nums))
+        #     trainset_1 = torch.utils.data.Subset(trainset, odds)
+        #     trainloader_1 = torch.utils.data.DataLoader(trainset_1, batch_size=400,
+        #                                             shuffle=True, num_workers=2)
+        #     print(len(trainloader_1), len(odds))
+        #     loaders.append(trainloader_1)
+        # time.sleep(1000)
+        # exit()
 
-        time.sleep(1000)
-        exit()
-
-        sched = AFL.Scheduler(**configs[0])
-        time.sleep(100)
-        exit()
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=2)
+        # sched = AFL.Scheduler(**configs[0])
+        # time.sleep(100)
+        # exit()
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
         
 
         # Replace class names with strings for serialization

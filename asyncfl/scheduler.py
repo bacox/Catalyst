@@ -10,6 +10,8 @@ import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
+
+from asyncfl.dataloader import afl_dataset2
 from .network import get_model_by_name, model_gradients, flatten, unflatten_b, unflatten_g, flatten_g, unflatten
 from asyncfl.network import flatten
 from .server import Server
@@ -68,8 +70,9 @@ class Scheduler:
         self.compute_times = {}
         if 'learning_rate' not in config['server_args']:
             config['server_args']['learning_rate'] = 0.005
-        self.entities['server'] = config['server'](dataset_name, model_name, **config['server_args'])
+        
         self.create_entities(**config)
+        self.dataset = None
 
     # def __init__(self, server_class, client_class, num_clients, dataset_name: str, config = None, server_args = {}, client_args = {}):
     #
@@ -99,11 +102,16 @@ class Scheduler:
         client_data = [(x, clients['client'], clients['client_args']) for x in clients['client_ct']] + [(x, clients['f_type'], clients['f_args']) for x in clients['f_ct']]
         num_clients = len(client_data)
 
+        # self.train_set = afl_dataset(dataset_name, use_iter=True, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
+        self.train_set = afl_dataset2(self.dataset_name,  data_type="train")
+        self.test_set = afl_dataset2(self.dataset_name,  data_type="test")
+        self.entities['server'] = config['server'](self.test_set, self.model_name, **config['server_args'])
 
+        # @TODO:: Move dataset split to here!
         def create_client(self, pid, c_ct, client_class, client_args):
             node_id = f'c_{pid}'
             # print(f'Starting node: {node_id}')
-            self.entities[node_id] = client_class(pid, num_clients, self.dataset_name, self.model_name, **client_args)
+            self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
         
         # async def create_all_clients(self, client_data):

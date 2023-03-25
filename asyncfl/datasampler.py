@@ -2,6 +2,7 @@ import random
 from torch.utils.data import DistributedSampler, Dataset
 from typing import Iterator
 import numpy as np
+import math
 
 def get_sampler(name:str):
     if name == 'uniform':
@@ -17,12 +18,11 @@ class DistributedSamplerWrapper(DistributedSampler):
     def __init__(self, dataset: Dataset, num_replicas = None,
                  rank = None, seed = 0) -> None:
         super().__init__(dataset, num_replicas=num_replicas, rank=rank)
-
         self.client_id = max(0,rank - 1)
         # self.n_clients = num_replicas - 1
         self.n_clients = num_replicas
-        if hasattr(dataset, 'classes'):
-            self.n_labels = len(dataset.classes)
+        if hasattr(self.dataset, 'classes'):
+            self.n_labels = len(self.dataset.classes)
         else:
             self.n_labels = 0
         self.seed = seed
@@ -69,6 +69,15 @@ class DistributedSamplerWrapper(DistributedSampler):
         return len(self.indices)
     
 
+def uniform_sampler_func(dataset: Dataset, num_replicas=1, rank=1, seed=0):
+    num_samples = math.ceil(len(dataset) / num_replicas)  # type: ignore[arg-type]
+    total_size = num_samples * num_replicas
+    indices = list(range(len(dataset)))
+    # random.shuffle(indices)
+    # print('Func')
+    return indices[rank:total_size:num_replicas]
+
+
 class UniformSampler(DistributedSamplerWrapper):
     def __init__(self, dataset, num_replicas=None, rank=None, seed=0):
         super().__init__(dataset, num_replicas=num_replicas, rank=rank, seed=seed)
@@ -76,7 +85,7 @@ class UniformSampler(DistributedSamplerWrapper):
         indices = list(range(len(self.dataset)))
         random.shuffle(self.indices)
 
-        self.indices = indices[self.rank:self.total_size:self.n_clients][:2]
+        self.indices = indices[self.rank:self.total_size:self.n_clients]
         print(f'Indices for rank {rank}:{num_replicas} is of size {len(self.indices)}')
 
 

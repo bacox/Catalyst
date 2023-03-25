@@ -1,25 +1,29 @@
 import numpy as np
 import torch
 import copy
-from .dataloader import afl_dataset
+from .dataloader import afl_dataloader, afl_dataset
 from .client import Client
 from .network import get_model_by_name, model_gradients, flatten, unflatten_g
 
 
 class Server:
 
-    def __init__(self, dataset: str, model_name: str, learning_rate: float = 0.005) -> None:
+    def __init__(self, dataset, model_name: str, learning_rate: float = 0.005) -> None:
         self.g_flat = None
         self.clients = []
-        self.dataset_name = dataset
-        self.test_set = afl_dataset(
-            self.dataset_name, use_iter=False, client_id=0, n_clients=1, data_type='test')
+        self.test_set = afl_dataloader(
+            dataset, use_iter=False, client_id=0, n_clients=1, data_type='test')
+        # self.dataset =
+        # self.dataset_name = dataset
+        # self.test_set = afl_dataset(
+        #     self.dataset_name, use_iter=False, client_id=0, n_clients=1, data_type='test')
         self.device = torch.device(
             'cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = get_model_by_name(model_name).to(self.device)
         self.learning_rate = learning_rate
         # @TODO: Set learning rate dynamic
-        self.optimizer = torch.optim.SGD(self.network.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.SGD(
+            self.network.parameters(), lr=self.learning_rate)
         self.w_flat = flatten(self.network)
         self.age = 0
 
@@ -37,8 +41,8 @@ class Server:
         self.send_model(client)
 
     def send_model(self, client: Client):
-        client.set_weights(self.get_model_weights())
-    
+        client.set_weights(self.get_model_weights(), self.get_age())
+
     def get_age(self):
         return self.age
 
@@ -95,14 +99,14 @@ class Server:
                 correct += (predicted == target).sum().item()
         return 100. * correct / total, loss.item()
 
-    def create_clients(self, n, config=None):
-        compute_times = []
-        if (not config):
-            compute_times = [[x, 1] for x in range(n)]
-        print(compute_times)
-        for pid, ct in compute_times:
-            self.clients.append(Client(pid, self.dataset_name))
-        print(self.clients)
+    # def create_clients(self, n, config=None):
+    #     compute_times = []
+    #     if (not config):
+    #         compute_times = [[x, 1] for x in range(n)]
+    #     print(compute_times)
+    #     for pid, ct in compute_times:
+    #         self.clients.append(Client(pid, self.dataset_name))
+    #     print(self.clients)
 
     def run(self):
         print('Running')
