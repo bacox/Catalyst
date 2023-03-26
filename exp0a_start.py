@@ -35,7 +35,7 @@ if __name__ == '__main__':
         idx = 1
         repetitions = 2
         limit = 10
-        num_clients = [50]
+        num_clients = [2]
         exp_id = 0
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
@@ -129,7 +129,7 @@ if __name__ == '__main__':
     dfs = []
     for out in outputs2:
         name = out[1]['name']
-        local_df = pd.DataFrame(out[0], columns=['round', 'accuracy', 'loss'])
+        local_df = pd.DataFrame(out[0][0], columns=['round', 'accuracy', 'loss'])
         local_df['name'] = name.split('-')[-1]
         dfs.append(local_df)
     server_df = pd.concat(dfs, ignore_index=True)

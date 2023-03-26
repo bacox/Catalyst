@@ -3,6 +3,8 @@ from typing import List
 
 import torch
 import numpy as np
+
+from asyncfl.util import compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
 
@@ -25,6 +27,7 @@ class Client:
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
+        self.lipschitz = None
         # print(f'Client {self.pid} has {len(self.train_set)} data samples to train')
 
     def get_pid(self):
@@ -50,7 +53,7 @@ class Client:
     
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.local_age]
+        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz , self.local_age]
     
 
     def set_weight_vectors(self, weights: np.ndarray, age):
@@ -102,7 +105,12 @@ class Client:
 
 
     def train(self, num_batches = -1):
+        # @TODO: Increment local_age
         self.w_flat = flatten(self.network)
+
+        prev_weights = self.w_flat.detach().clone()
+        prev_gradients = self.g_flat.detach().clone()
+
         g_flat_local = torch.zeros_like(self.w_flat)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.optimizer.zero_grad()
@@ -121,6 +129,8 @@ class Client:
             if batch_idx == num_batches:
                 break
             # print(self.g_flat)
+        current_weights = flatten(self.network)
+        self.lipschitz = compute_lipschitz_simple(self.g_flat, prev_gradients, current_weights, prev_weights)
 
 
 

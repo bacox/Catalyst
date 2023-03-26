@@ -183,7 +183,7 @@ class Scheduler:
 
                 client.move_to_gpu()
                 client.train(num_batches=1)
-                c_gradients, c_buffers, age = client.get_gradient_vectors()
+                c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
                 gradients.append(c_gradients)
                 buffers.append(c_buffers)
                 client.move_to_cpu()
@@ -256,7 +256,7 @@ class Scheduler:
 
             client.move_to_gpu()
             client.train(num_batches=1)
-            c_gradients, c_buffers, age = client.get_gradient_vectors()
+            c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
             server.incr_age()
             gradient_age = server.get_age() - age
             # if gradient_age == 0:
