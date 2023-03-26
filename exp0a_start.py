@@ -29,49 +29,83 @@ if __name__ == '__main__':
         configs = []
         model_list = ['mnist-cnn']
         dataset = 'mnist'
-        f = 30  # number of byzantine clients
+        f = 3  # number of byzantine clients
         # num_rounds = 50*10
         num_rounds = 300
         idx = 1
         repetitions = 2
         limit = 100
-        num_clients = [100]
+        num_clients = [10]
         exp_id = 0
+        s_lr = 0.1
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
                 for model_name in model_list:
-                    # exp_id += 1
-                    # configs.append({
-                    #     'exp_id': exp_id,
-                    #     'aggregation_type': 'async',
-                    #     'client_participartion': 0.2,
-                    #     'name': f'afl-{model_name}-{dataset}-n{n}_afl0f',
-                    #     'num_rounds': num_rounds,
-                    #     'clients': {
-                    #             'client': AFL.Client,
-                    #             'client_args': {
-                    #                 'sampler': 'uniform',
-                    #                 'sampler_args': {
-                    #                 }
-                    #             },
-                    #         'client_ct': [200] * (n - f),
-                    #         'n': n,
-                    #         'f': f,
-                    #         'f_type': AFL.Client,
-                    #         'f_args': {'sampler': 'uniform',
-                    #                 'sampler_args': {
-                    #                 },
-                    #                 },
-                    #         'f_ct': [200] * f
-                    #     },
-                    #     'server': AFL.Server,
-                    #     'server_args': {
-                    #         # 'damp_alpha': 0.01
-                    #     },
-                    #     'dataset_name': dataset,
-                    #     'model_name': model_name
-                    # })
+                    exp_id += 1
+                    configs.append({
+                        'exp_id': exp_id,
+                        'aggregation_type': 'async',
+                        'client_participartion': 0.2,
+                        'name': f'afl-{model_name}-{dataset}-n{n}_basgd{f}f',
+                        'num_rounds': num_rounds,
+                        'clients': {
+                                'client': AFL.Client,
+                                'client_args': {
+                                    'sampler': 'uniform',
+                                    'sampler_args': {
+                                    }
+                                },
+                            'client_ct': [200] * (n - f),
+                            'n': n,
+                            'f': f,
+                            'f_type': AFL.NGClient,
+                            'f_args': {'sampler': 'uniform',
+                                    'sampler_args': {
+                                    },
+                                    'magnitude': 10},
+                            'f_ct': [200] * f
+                        },
+                        'server': AFL.BASGD,
+                        'server_args': {
+                            'num_buffers': 4,
+                            'learning_rate': 0.1,
+                        },
+                        'dataset_name': dataset,
+                        'model_name': model_name
+                    })
+                    exp_id += 1
+                    configs.append({
+                        'exp_id': exp_id,
+                        'aggregation_type': 'async',
+                        'client_participartion': 0.2,
+                        'name': f'afl-{model_name}-{dataset}-n{n}_afl0f',
+                        'num_rounds': num_rounds,
+                        'clients': {
+                                'client': AFL.Client,
+                                'client_args': {
+                                    'sampler': 'uniform',
+                                    'sampler_args': {
+                                    }
+                                },
+                            'client_ct': [200] * (n - f),
+                            'n': n,
+                            'f': f,
+                            'f_type': AFL.Client,
+                            'f_args': {'sampler': 'uniform',
+                                    'sampler_args': {
+                                    },
+                                    },
+                            'f_ct': [200] * f
+                        },
+                        'server': AFL.Server,
+                        'server_args': {
+                            # 'damp_alpha': 0.01
+                            'learning_rate': 0.1,
+                        },
+                        'dataset_name': dataset,
+                        'model_name': model_name
+                    })
                     exp_id += 1
                     configs.append({
                         'exp_id': exp_id,
@@ -93,16 +127,18 @@ if __name__ == '__main__':
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
-                                    'magnitude': 10},
+                                    'magnitude': 5},
                             'f_ct': [200] * f
                         },
                         'server': AFL.Server,
                         'server_args': {
                             # 'damp_alpha': 0.01
+                            'learning_rate': 0.1,
                         },
                         'dataset_name': dataset,
                         'model_name': model_name
                     })
+                    
                     exp_id += 1
                     configs.append({
                         'exp_id': exp_id,
@@ -124,12 +160,13 @@ if __name__ == '__main__':
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
-                                    'magnitude': 10},
+                                    'magnitude': 5},
                             'f_ct': [1] * f
                         },
                         'server': AFL.Kardam,
                         'server_args': {
-                            'damp_alpha': 0.01
+                            'damp_alpha': 0.01,
+                            'learning_rate': 0.1,
                         },
                         'dataset_name': dataset,
                         'model_name': model_name
@@ -146,7 +183,7 @@ if __name__ == '__main__':
                 # @TODO: Append to output instead of overwriting
                 # print(configs)
             # exit()
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=6)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
 
         # Replace class names with strings for serialization
         for i in outputs:

@@ -4,7 +4,7 @@ import copy
 import numpy as np
 import torch
 from asyncfl import Server
-from asyncfl.network import unflatten_g
+from asyncfl.network import flatten, unflatten_g
 
 
 class Buffer:
@@ -168,5 +168,10 @@ class BASGD(Server):
                 avg_grad = krum_aggregation(buffer_gradients, self.q)
             else:
                 avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
-            self.aggregate(avg_grad)
-        return self.get_model_weights()
+            print(f'Aggregate!!!! --> {avg_grad}')
+            # self.aggregate(avg_grad)
+            self.aggregate(buffer_gradients[0])
+            
+
+        return flatten(self.network)
+        # return self.get_model_weights()
