@@ -61,7 +61,7 @@ class BufferSet_G:
                 return False
         return True
 
-    def get_all_gradients(self) -> np.array:
+    def get_all_gradients(self):
         gradients = [copy.deepcopy(b.avg_gradient) for b in self.buffers]
         for b in self.buffers:
             b.reset()
@@ -95,7 +95,7 @@ class BufferSet:
                 return False
         return True
 
-    def get_all_gradients(self) -> np.array:
+    def get_all_gradients(self):
         # print(f'Number of buffers={self.B} and len-> {len(self.buffers)}')
         gradients = [copy.deepcopy(b.avg_gradient) for b in self.buffers]
         for b in self.buffers:
@@ -147,13 +147,13 @@ def krum_aggregation(list_of_gradients, q):
     return list_of_gradients[i_star]
 
 class BASGD(Server):
-    def __init__(self, dataset: str, model_name: str, learning_rate: float, num_buffers, aggr_mode: str = 'async', q=1):
-        super().__init__(dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, num_buffers, aggr_mode: str = 'async', q=1):
+        super().__init__(n, f, dataset, model_name, learning_rate)
         self.buffers = BufferSet(num_buffers)
         self.aggr_mode = aggr_mode
         self.q = q
 
-    def client_update(self, client_id: int, gradients: np.ndarray, gradient_age):
+    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
         grads = torch.from_numpy(gradients)
         # print(f'Got gradient from client {client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.buffers.receive(grads, client_id)

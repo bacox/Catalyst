@@ -8,6 +8,9 @@ from asyncfl.util import compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
 
+def polyak_update(polyak_factor, target_network, network):
+    for target_param, param in zip(target_network.parameters(), network.parameters()):
+        target_param.data.copy_(polyak_factor*param.data + target_param.data*(1.0 - polyak_factor))
 
 class Client:
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005) -> None:
@@ -60,11 +63,6 @@ class Client:
         self.local_age = age
         unflatten(self.network, torch.from_numpy(weights).to(self.device))
     
-
-
-    def polyak_update(polyak_factor, target_network, network):
-        for target_param, param in zip(target_network.parameters(), network.parameters()):
-            target_param.data.copy_(polyak_factor*param.data + target_param.data*(1.0 - polyak_factor))
 
     # GPU AUX FUNCTIONS
     def move_to_gpu(self):

@@ -104,7 +104,7 @@ def afl_dataset(
     indices = list(range(0, len(data_set), 100))
     # indices = uniform_sampler_func(data_set, n_clients, client_id, seed, **sampler_args)
     
-    # ds_subset = Subset(data_set, indices)
+    ds_subset = Subset(data_set, indices)
     # data_set = None
     # print('fINIHSED')
     # return None

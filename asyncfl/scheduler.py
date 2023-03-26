@@ -83,7 +83,7 @@ class Scheduler:
 
         self.train_set = afl_dataset2(self.dataset_name,  data_type="train")
         self.test_set = afl_dataset2(self.dataset_name,  data_type="test")
-        self.entities['server'] = config['server'](
+        self.entities['server'] = config['server'](n, f,
             self.test_set, self.model_name, **config['server_args'])
 
         def create_client(self, pid, c_ct, client_class, client_args):
@@ -202,7 +202,7 @@ class Scheduler:
                 avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
             new_model_weights_vector = server.client_update(
-                client.get_pid(), agv_gradient, server.get_age())
+                client.get_pid(), agv_gradient, lipschitz, server.get_age())
             # new_model_weights_vector = server.get_model_weights()
             for client in clients:
                 client.move_to_gpu()
@@ -247,7 +247,7 @@ class Scheduler:
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
 
-            if update_id % 50 == 0:
+            if update_id % 25 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(
@@ -265,7 +265,7 @@ class Scheduler:
             model_age_stats.append([update_id, client.pid, gradient_age])
             unflatten_b(server.network, c_buffers)
             new_model_weights_vector = server.client_update(
-                client.get_pid(), c_gradients, age)
+                client.get_pid(), c_gradients, lipschitz, age)
             client.set_weight_vectors(
                 new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
@@ -374,7 +374,6 @@ class Scheduler:
         cfg['client_participartion'] = cfg.get('client_participartion', 1.0)
         return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
 
-
     @staticmethod
     def run_sync(list_of_configs, pool_size=5):
         """
@@ -383,4 +382,3 @@ class Scheduler:
         raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         return [Scheduler.run_util_sync(cfg) for cfg in tqdm(list_of_configs, total=len(list_of_configs), position=0, leave=None, desc='Total')]
         # return [Scheduler.run_util_sync(cfg) for cfg in list_of_configs]
-

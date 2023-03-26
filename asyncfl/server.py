@@ -8,9 +8,11 @@ from .network import get_model_by_name, model_gradients, flatten, unflatten_g
 
 class Server:
 
-    def __init__(self, dataset, model_name: str, learning_rate: float = 0.005) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005) -> None:
         self.g_flat = None
         self.clients = []
+        self.n = n
+        self.f = f
         self.test_set = afl_dataloader(
             dataset, use_iter=False, client_id=0, n_clients=1, data_type='test')
         # self.dataset =
@@ -25,7 +27,24 @@ class Server:
         self.optimizer = torch.optim.SGD(
             self.network.parameters(), lr=self.learning_rate)
         self.w_flat = flatten(self.network)
+        self.prev_weights =  torch.zeros_like(self.w_flat)
+        self.prev_gradients = torch.zeros_like(self.w_flat)
         self.age = 0
+        self.lips = {}
+        self.bft_telemetry = {
+            "accepted": {
+                i: {
+                    "values":[],
+                    "total":0
+                } for i in range(n)
+            }, 
+            "rejected" : {
+                i: {
+                    "values":[],
+                    "total":0
+                } for i in range(n)
+            }
+        }
 
     def set_weights(self, weights):
         self.network.load_state_dict(copy.deepcopy(weights))
@@ -49,7 +68,7 @@ class Server:
     def incr_age(self):
         self.age += 1
 
-    def client_update(self, _client_id: int, gradients: np.ndarray, gradient_age: int):
+    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
@@ -83,8 +102,10 @@ class Server:
         """Merges the new gradients and assigns them to their relevant parameter
         Uses the optimizer update the model based on the gradients
         """
+        self.prev_weights = flatten(self.network)
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
+        self.prev_gradients = client_gradients
 
     def evaluate_accuracy(self):
         self.network.eval()
