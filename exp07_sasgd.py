@@ -28,18 +28,18 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
         configs = []
-        model_list = ['mnist-cnn']
-        dataset = 'mnist'
+        model_list = ['cifar100-resnet9']
+        dataset = 'cifar100'
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
-        num_rounds = 1000
+        num_rounds = 3000
         idx = 1
         repetitions = 2
         limit = 10
         # num_clients = [50]
-        num_clients = [10]
+        num_clients = [50]
         exp_id = 0
-        server_learning_rates = [0.005, 0.05, 0.5]
+        server_learning_rates = [0.001, 0.0025, 0.005, 0.025, 0.01, 0.05, 0.5]
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
@@ -84,7 +84,7 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
   
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=3)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
         
 
         # Replace class names with strings for serialization
@@ -122,12 +122,12 @@ if __name__ == '__main__':
     model_age_df = pd.concat(dfs_server_age, ignore_index=True)
 
 
-
     graph_file = graphs_path / f'{exp_name}.png'
+    print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
     g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
-    plt.title('Different number of clients in async Learning. Cifar100 - ResNet9')
+    plt.title('SA - Mitigation. Cifar100 - ResNet9')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
@@ -135,6 +135,7 @@ if __name__ == '__main__':
     plt.close(fig)
 
     graph_file = graphs_path / f'{exp_name}_model_age.png'
+    print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
     g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
@@ -146,10 +147,11 @@ if __name__ == '__main__':
     plt.close(fig)
 
     graph_file = graphs_path / f'{exp_name}_model_age_hist.png'
+    print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
     # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
-    g = sns.histplot(data=model_age_df, x="model_age", kde=True)
+    g = sns.histplot(data=model_age_df, x="model_age", kde=True, hue='name')
     plt.title('Model Age')
     plt.xlabel('Model Age')
     plt.ylabel('Density')
@@ -158,10 +160,11 @@ if __name__ == '__main__':
     plt.close(fig)
 
     graph_file = graphs_path / f'{exp_name}_client_hist.png'
+    print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
     # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
-    g = sns.histplot(data=model_age_df, x="client", kde=True)
+    g = sns.histplot(data=model_age_df, x="client", kde=True, hue='name')
     plt.title('Client contributions')
     plt.xlabel('Client contributions')
     plt.ylabel('Density')
