@@ -247,7 +247,7 @@ class Scheduler:
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
 
-            if update_id % 50 == 0:
+            if update_id % 25 == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(
