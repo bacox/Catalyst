@@ -38,6 +38,7 @@ if __name__ == '__main__':
         num_clients = [10]
         exp_id = 0
         s_lr = 0.1
+        magnitude = 3
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
@@ -63,7 +64,7 @@ if __name__ == '__main__':
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
-                                    'magnitude': 10},
+                                    'magnitude': magnitude},
                             'f_ct': [200] * f
                         },
                         'server': AFL.BASGD,
@@ -88,15 +89,15 @@ if __name__ == '__main__':
                                     'sampler_args': {
                                     }
                                 },
-                            'client_ct': [200] * (n - f),
+                            'client_ct': [200] * (n - 0),
                             'n': n,
-                            'f': f,
+                            'f': 0,
                             'f_type': AFL.Client,
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
                                     },
-                            'f_ct': [200] * f
+                            'f_ct': [200] * 0
                         },
                         'server': AFL.Server,
                         'server_args': {
@@ -127,7 +128,7 @@ if __name__ == '__main__':
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
-                                    'magnitude': 5},
+                                    'magnitude': magnitude},
                             'f_ct': [200] * f
                         },
                         'server': AFL.Server,
@@ -160,7 +161,7 @@ if __name__ == '__main__':
                             'f_args': {'sampler': 'uniform',
                                     'sampler_args': {
                                     },
-                                    'magnitude': 5},
+                                    'magnitude': magnitude},
                             'f_ct': [1] * f
                         },
                         'server': AFL.Kardam,
@@ -183,7 +184,7 @@ if __name__ == '__main__':
                 # @TODO: Append to output instead of overwriting
                 # print(configs)
             # exit()
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=4)
 
         # Replace class names with strings for serialization
         for i in outputs:

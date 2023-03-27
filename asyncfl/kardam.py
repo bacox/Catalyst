@@ -58,8 +58,8 @@ class Kardam(Server):
 
         # print(f'Model_staleness={model_staleness}, damp_factor={dampening_factor(model_staleness, alpha=self.damp_alpha)}')
         grads = grads * dampening_factor(model_staleness, self.damp_alpha)
-        prev_model = flatten(self.network).detach().clone()
-        current_model = flatten(self.network).detach().clone() * self.learning_rate * grads
+        prev_model = flatten(self.network).detach().clone().cpu()
+        current_model = flatten(self.network).detach().clone().cpu() * self.learning_rate * grads
         # current_model
 
         self.k_pt = compute_lipschitz_simple(grads, self.prev_gradients, current_model, prev_model)

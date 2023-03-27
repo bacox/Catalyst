@@ -168,7 +168,7 @@ class BASGD(Server):
                 avg_grad = krum_aggregation(buffer_gradients, self.q)
             else:
                 avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
-            print(f'Aggregate!!!! --> {avg_grad}')
+            # print(f'Aggregate!!!! --> {avg_grad}')
             # self.aggregate(avg_grad)
             self.aggregate(buffer_gradients[0])
             

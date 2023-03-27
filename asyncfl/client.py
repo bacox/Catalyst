@@ -128,7 +128,7 @@ class Client:
                 break
             # print(self.g_flat)
         current_weights = flatten(self.network)
-        self.lipschitz = compute_lipschitz_simple(self.g_flat, prev_gradients, current_weights, prev_weights)
+        self.lipschitz = compute_lipschitz_simple(self.g_flat.cpu(), prev_gradients.cpu(), current_weights.cpu(), prev_weights.cpu())
 
 
 

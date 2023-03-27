@@ -135,7 +135,8 @@ class Scheduler:
 
             # Update the time for all the clients with the elapsed time of min_ct
             for c in clients:
-                c['ct_left'] -= min_ct
+                c['ct_left'] -= min_ct + 1
+
 
             # Perform client server interaction between server and min_ct
             # Reset compute time of min_ct
@@ -232,6 +233,13 @@ class Scheduler:
         interaction_sequence = self.compute_interaction_sequence(
             self.compute_times, num_rounds+1)
 
+        # c_ids = list(self.compute_times.keys())
+        # random.shuffle(c_ids)
+        # interaction_sequence = (list(self.compute_times.keys())*(int(num_rounds / len(self.compute_times))+1))[:num_rounds]
+
+
+        # seqs = [self.compute_interaction_sequence(
+        #     self.compute_times, num_rounds+1) for x in range(10)]
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
