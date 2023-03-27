@@ -11,6 +11,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "-omit", help="Omit running experiment",
                         action="store_true")
+    parser.add_argument('-a', '--autocomplete',
+                        help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
     print('Exp 0: This experiment is to run baselines. The model used is ResNet9 with the Cifar100 dataset. '
