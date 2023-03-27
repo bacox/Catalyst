@@ -1,5 +1,6 @@
 #
 # from .server import Server
+import copy
 from multiprocessing import Pool, current_process, RLock, Process
 from multiprocessing.pool import AsyncResult
 from typing import List
@@ -252,6 +253,8 @@ class Scheduler:
         server_metrics = []
         model_age_stats = []
 
+        use_weight_avg = False
+
         # Play all the server interactions
         for update_id, client_id in enumerate(pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)):
 
@@ -264,18 +267,19 @@ class Scheduler:
 
             client.move_to_gpu()
             client.train(num_batches=1)
-            c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
-            server.incr_age()
-            gradient_age = server.get_age() - age
-            # if gradient_age == 0:
-            #     print('No')
-            # print(f'Gradient age: {server.get_age()}-{age}={gradient_age}')
-            model_age_stats.append([update_id, client.pid, gradient_age])
-            unflatten_b(server.network, c_buffers)
-            new_model_weights_vector = server.client_update(
-                client.get_pid(), c_gradients, lipschitz, age)
-            client.set_weight_vectors(
-                new_model_weights_vector.cpu().numpy(), server.get_age())
+
+            if use_weight_avg:
+                server.set_weights(client.network.state_dict())
+            else:
+                c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
+                server.incr_age()
+                gradient_age = server.get_age() - age
+                model_age_stats.append([update_id, client.pid, gradient_age])
+                unflatten_b(server.network, c_buffers)
+                new_model_weights_vector = server.client_update(
+                    client.get_pid(), c_gradients, lipschitz, gradient_age)
+                client.set_weight_vectors(
+                    new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
 
         return server_metrics, model_age_stats
@@ -322,22 +326,26 @@ class Scheduler:
 
     @staticmethod
     def run_util(cfg):
-        sched = Scheduler(**cfg)
-        num_rounds = cfg['num_rounds']
-        if 'aggregation_type' in cfg and cfg['aggregation_type'] == 'sync':
-            # Run synchronous scheduler
-            worker_id = int(current_process()._identity[0])
+        try:
+            sched = Scheduler(**cfg)
+            num_rounds = cfg['num_rounds']
+            if 'aggregation_type' in cfg and cfg['aggregation_type'] == 'sync':
+                # Run synchronous scheduler
+                worker_id = int(current_process()._identity[0])
 
-            # worker_id = 1
-            cfg['client_participartion'] = cfg.get(
-                'client_participartion', 1.0)
-            # print('Running SYNC scheduler')
-            return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
-        else:
-            # Default: Run asyn scheduler
-            # print('Running ASYNC scheduler')
-            worker_id = int(current_process()._identity[0])
-            return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+                # worker_id = 1
+                cfg['client_participartion'] = cfg.get(
+                    'client_participartion', 1.0)
+                # print('Running SYNC scheduler')
+                return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
+            else:
+                # Default: Run asyn scheduler
+                # print('Running ASYNC scheduler')
+                worker_id = int(current_process()._identity[0])
+                return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+        except Exception as ex:
+            print('Got an exception while running!!')
+            print(ex)
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5):
@@ -347,7 +355,7 @@ class Scheduler:
                     initargs=(tqdm.get_lock(),))
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
         outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(
-            list_of_configs), position=0, leave=None, desc='Total')]
+            list_of_configs), position=0, leave=None, desc='Total') if x]
         print(
             f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return outputs

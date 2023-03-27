@@ -22,31 +22,59 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp08_sa_diff_num_clients'
+    exp_name = 'exp09_c10_lr_sweep'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
         # Define configurations
         configs = []
-        model_list = ['cifar100-resnet9']
-        dataset = 'cifar100'
+        model_list = ['cifar10-lenet']
+        dataset = 'cifar10'
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
         num_rounds = 2000
         idx = 1
-        repetitions = 1
+        repetitions = 2
         limit = 10
         # num_clients = [50]
-        num_clients = [25, 10, 5, 1, 50]
+        num_clients = [50]
         exp_id = 0
         # server_learning_rates = [0.0025]
-        # server_learning_rates = [0.001, 0.0025, 0.005, 0.025, 0.01, 0.05, 0.5]
-        server_learning_rates = [ 0.01]
+        server_learning_rates = [0.001, 0.0025, 0.005, 0.025, 0.01, 0.05, 0.1, 0.5]
+        # server_learning_rates = [ 0.01]
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
                 for s_lr in server_learning_rates:
                     for model_name in model_list:
+                        exp_id += 1
+                        configs.append({
+                            'exp_id': exp_id,
+                            'aggregation_type': 'async',
+                            'name': f'afl-{model_name}-{dataset}-n{n}-lr{s_lr}_async',
+                            'num_rounds': num_rounds,
+                            'clients': {
+                                    'client': AFL.Client,
+                                    'client_args': {
+                                        'learning_rate': 0.005,
+                                        'sampler': 'uniform',
+                                        'sampler_args': {
+                                        }
+                                    },
+                                'client_ct': [1] * (n - f),
+                                'n': n,
+                                'f': f,
+                                'f_type': AFL.NGClient,
+                                'f_args': {'magnitude': 10},
+                                'f_ct': [1] * f
+                            },
+                            'server': AFL.Server,
+                            'server_args': {
+                                'learning_rate': s_lr,
+                            },
+                            'dataset_name': dataset,
+                            'model_name': model_name
+                        })
                         exp_id += 1
                         configs.append({
                             'exp_id': exp_id,
@@ -86,7 +114,7 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
   
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=6)
         
 
         # Replace class names with strings for serialization

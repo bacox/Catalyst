@@ -12,6 +12,8 @@ def get_model_by_name(name: str):
         return MNIST_CNN()
     elif name == 'cifar10-lenet':
         return LeNet(output_dim=10)
+    elif name == 'cifar10-resnet9':
+        return ResNet9(3, 10)
     elif name == 'cifar100-lenet':
         return LeNet(output_dim=100)
     elif name == 'cifar100-resnet':

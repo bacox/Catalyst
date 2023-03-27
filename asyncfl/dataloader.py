@@ -151,10 +151,10 @@ def load_cifar10(data_root: str, data_type: str):
         ]
     )
     if data_type == 'train':
-        return datasets.CIFAR10(data_root, train=True, download=True, transform=transform
+        return datasets.CIFAR10(data_root, train=True, download=False, transform=transform
         )
     else:
-        return datasets.CIFAR10(data_root, train=False, transform=transform)
+        return datasets.CIFAR10(data_root, train=False, download=False, transform=transform)
 
 
 def load_cifar100(data_root: str, data_type: str):

@@ -18,30 +18,30 @@ if __name__ == '__main__':
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 08: Staleness Aware SGD diff num clients')
+    print('Exp 10: Check settings from basgd paper.')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp08_sa_diff_num_clients'
+    exp_name = 'exp10_c10_lr_check'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
         # Define configurations
         configs = []
-        model_list = ['cifar100-resnet9']
-        dataset = 'cifar100'
+        # model_list = ['cifar10-lenet', 'cifar10-resnet9']
+        model_list = ['cifar10-resnet9']
+        dataset = 'cifar10'
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
-        num_rounds = 2000
+        num_rounds = 1300
         idx = 1
         repetitions = 1
-        limit = 10
         # num_clients = [50]
-        num_clients = [25, 10, 5, 1, 50]
+        num_clients = [1]
         exp_id = 0
         # server_learning_rates = [0.0025]
-        # server_learning_rates = [0.001, 0.0025, 0.005, 0.025, 0.01, 0.05, 0.5]
-        server_learning_rates = [ 0.01]
+        server_learning_rates = [0.1, 0.05]
+        # server_learning_rates = [ 0.01]
         # num_clients = [50, 25, 10, 5, 1]
         for _r in range(repetitions):
             for n in num_clients:
@@ -51,12 +51,12 @@ if __name__ == '__main__':
                         configs.append({
                             'exp_id': exp_id,
                             'aggregation_type': 'async',
-                            'name': f'sasgd-{model_name}-{dataset}-n{n}-lr{s_lr}_async',
+                            'name': f'afl-{model_name}-{dataset}-n{n}-lr{s_lr}_async',
                             'num_rounds': num_rounds,
                             'clients': {
                                     'client': AFL.Client,
                                     'client_args': {
-                                        'learning_rate': 0.005,
+                                        'learning_rate': s_lr,
                                         'sampler': 'uniform',
                                         'sampler_args': {
                                         }
@@ -68,7 +68,7 @@ if __name__ == '__main__':
                                 'f_args': {'magnitude': 10},
                                 'f_ct': [1] * f
                             },
-                            'server': AFL.SaSGD,
+                            'server': AFL.Server,
                             'server_args': {
                                 'learning_rate': s_lr,
                             },
@@ -86,7 +86,7 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
   
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=2)
         
 
         # Replace class names with strings for serialization
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     for out in outputs2:
         name = out[1]['name']
         local_df = pd.DataFrame(out[0][0], columns=['round', 'accuracy', 'loss'])
-        local_df['name'] = name.split('-')[-1]
+        local_df['name'] = f"{name.split('-')[-1]}-{name.split('-')[2]}"
         dfs.append(local_df)
     server_df = pd.concat(dfs, ignore_index=True)
 
@@ -119,7 +119,7 @@ if __name__ == '__main__':
     for out in outputs2:
         name = out[1]['name']
         local_df = pd.DataFrame(out[0][1], columns=['round', 'client', 'model_age'])
-        local_df['name'] = name.split('-')[-1]
+        local_df['name'] = f"{name.split('-')[-1]}"
         dfs_server_age.append(local_df)
     model_age_df = pd.concat(dfs_server_age, ignore_index=True)
 
@@ -136,43 +136,43 @@ if __name__ == '__main__':
     plt.savefig(graph_file)
     plt.close(fig)
 
-    graph_file = graphs_path / f'{exp_name}_model_age.png'
-    print(f'Generating plot: {graph_file}')
-    # Visualize data
-    fig = plt.figure(figsize=(8, 6))
-    g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
-    plt.title('Model Age')
-    plt.xlabel('Rounds')
-    plt.ylabel('Model age')
-    g.legend_.set_title(None)
-    plt.savefig(graph_file)
-    plt.close(fig)
-
-    graph_file = graphs_path / f'{exp_name}_model_age_hist.png'
-    print(f'Generating plot: {graph_file}')
-    # Visualize data
-    fig = plt.figure(figsize=(8, 6))
+    # graph_file = graphs_path / f'{exp_name}_model_age.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
     # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
-    g = sns.histplot(data=model_age_df, x="model_age", kde=True, hue='name')
-    plt.title('Model Age')
-    plt.xlabel('Model Age')
-    plt.ylabel('Density')
+    # plt.title('Model Age')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Model age')
     # g.legend_.set_title(None)
-    plt.savefig(graph_file)
-    plt.close(fig)
+    # plt.savefig(graph_file)
+    # plt.close(fig)
 
-    graph_file = graphs_path / f'{exp_name}_client_hist.png'
-    print(f'Generating plot: {graph_file}')
-    # Visualize data
-    fig = plt.figure(figsize=(8, 6))
-    # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
-    g = sns.histplot(data=model_age_df, x="client", kde=True, hue='name')
-    plt.title('Client contributions')
-    plt.xlabel('Client contributions')
-    plt.ylabel('Density')
-    # g.legend_.set_title(None)
-    plt.savefig(graph_file)
-    plt.close(fig)
+    # graph_file = graphs_path / f'{exp_name}_model_age_hist.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
+    # g = sns.histplot(data=model_age_df, x="model_age", kde=True, hue='name')
+    # plt.title('Model Age')
+    # plt.xlabel('Model Age')
+    # plt.ylabel('Density')
+    # # g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # plt.close(fig)
+
+    # graph_file = graphs_path / f'{exp_name}_client_hist.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # # g = sns.lineplot(data=model_age_df, x='round', y='model_age', hue='name')
+    # g = sns.histplot(data=model_age_df, x="client", kde=True, hue='name')
+    # plt.title('Client contributions')
+    # plt.xlabel('Client contributions')
+    # plt.ylabel('Density')
+    # # g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # plt.close(fig)
 
 
 
