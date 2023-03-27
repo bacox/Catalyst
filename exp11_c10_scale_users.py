@@ -86,7 +86,7 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
   
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=3)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=1)
         
 
         # Replace class names with strings for serialization
