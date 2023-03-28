@@ -245,7 +245,7 @@ class Scheduler:
 
         # c_ids = list(self.compute_times.keys())
         # random.shuffle(c_ids)
-        # interaction_sequence = (list(self.compute_times.keys())*(int(num_rounds / len(self.compute_times))+1))[:num_rounds]
+        interaction_sequence = (list(self.compute_times.keys())*(int(num_rounds / len(self.compute_times))+1))[:num_rounds]
 
 
         # seqs = [self.compute_interaction_sequence(

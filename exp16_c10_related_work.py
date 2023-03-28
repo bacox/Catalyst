@@ -50,7 +50,7 @@ if __name__ == '__main__':
         servers = [
             [AFL.SaSGD,{'learning_rate': server_lr}],
             [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15}]
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'median'}]
         ]
         f0_keys = []
 
