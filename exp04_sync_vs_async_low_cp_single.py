@@ -21,7 +21,8 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp04_low_client_participation_single_test_remove_afterwards'
+    # exp_name = 'exp04_low_client_participation_single_test_remove_afterwards'
+    exp_name = 'exp04_low_client_participation_single'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -134,7 +135,10 @@ if __name__ == '__main__':
     server_df = pd.concat(dfs, ignore_index=True)
 
     graph_file = graphs_path / f'{exp_name}.png'
+    graph_file_pdf = graphs_path / f'{exp_name}.pdf'
     graph_file2 = graphs_path / f'{exp_name}_data_used.png'
+    sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
+    # sns.set_context("talk", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
     g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
@@ -142,16 +146,18 @@ if __name__ == '__main__':
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
+    plt.tight_layout()
     plt.savefig(graph_file)
+    plt.savefig(graph_file_pdf)
     plt.close(fig)
 
-    fig = plt.figure(figsize=(12, 6))
-    g = sns.lineplot(data=server_df, x='data_used', y='accuracy', hue='name')
-    plt.title('Synchronous Learning vs Async Learning. Cifar100 - ResNet9')
-    plt.xlabel('Data used')
-    plt.xlim(xmax = 1000, xmin = 0)
-    plt.ylabel('Test accuracy')
-    g.legend_.set_title(None)
-    plt.savefig(graph_file2)
-    plt.close(fig)
-    # plt.show()
+    # fig = plt.figure(figsize=(12, 6))
+    # g = sns.lineplot(data=server_df, x='data_used', y='accuracy', hue='name')
+    # plt.title('Synchronous Learning vs Async Learning. Cifar100 - ResNet9')
+    # plt.xlabel('Data used')
+    # plt.xlim(xmax = 1000, xmin = 0)
+    # plt.ylabel('Test accuracy')
+    # g.legend_.set_title(None)
+    # plt.savefig(graph_file2)
+    # plt.close(fig)
+    # # plt.show()

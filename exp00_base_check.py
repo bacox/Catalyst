@@ -20,10 +20,11 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp00_base_check_epoch_lr'
+    # exp_name = 'exp00_base_check_epoch_lr'
+    exp_name = 'exp00_base_check'
     data_file = data_path / f'{exp_name}.json'
 
-    if not args.o:
+    if not args.o and False:
         # Define configurations
         configs = []
         f = 0  # number of byzantine clients
@@ -87,11 +88,13 @@ if __name__ == '__main__':
 
     graph_file = graphs_path / f'{exp_name}.png'
     # Visualize data
-    plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(8, 6))
     g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
     plt.title('Different number of clients in async Learning. Cifar100 - ResNet9')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # plt.show()
     plt.savefig(graph_file)
-    plt.show()
+    plt.close(fig)
