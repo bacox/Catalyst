@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp13_c10_byzantine_effects'
+    exp_name = 'exp13_c10_byzantine_effects_retry'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -36,10 +36,10 @@ if __name__ == '__main__':
         model_list = ['cifar10-resnet9']
         dataset = 'cifar10'
         # num_byz_nodes = [0]
-        num_byz_nodes = [0, 3, 6]
+        num_byz_nodes = [0, 5, 10]
         f = 0  # number of byzantine clients
         # num_rounds = 50*10
-        num_rounds = 1300
+        num_rounds = 2000
         idx = 1
         repetitions = 2
         # num_clients = [50]
@@ -47,7 +47,7 @@ if __name__ == '__main__':
         exp_id = 0
         # server_learning_rates = [0.0025]
         # server_learning_rates = [0.05]
-        server_learning_rates = [ 0.01]
+        server_learning_rates = [ 0.01, 0.05]
         # num_clients = [50, 25, 10]
         num_clients = [50]
         f0_keys = []
@@ -81,7 +81,7 @@ if __name__ == '__main__':
                         },
                         'f_ct': [1] * f
                     },
-                    'server': AFL.Server,
+                    'server': AFL.SaSGD,
                     'server_args': {
                         'learning_rate': s_lr,
                     },
@@ -113,7 +113,7 @@ if __name__ == '__main__':
                         },
                         'f_ct': [1] * f
                     },
-                    'server': AFL.Server,
+                    'server': AFL.SaSGD,
                     'server_args': {
                         'learning_rate': s_lr,
                     },
@@ -149,7 +149,7 @@ if __name__ == '__main__':
                         },
                         'f_ct': [1] * f
                     },
-                    'server': AFL.Server,
+                    'server': AFL.SaSGD,
                     'server_args': {
                         'learning_rate': s_lr,
                     },
