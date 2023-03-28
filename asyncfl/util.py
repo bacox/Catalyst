@@ -36,7 +36,7 @@ def compute_lipschitz(self,time,grad_history, model_vec: torch.Tensor, prev_mode
 def compute_lipschitz_simple(current_grad:torch.Tensor, previous_grad:torch.Tensor, model_vec: torch.Tensor, prev_model_vec: torch.Tensor):
     if  torch.sum(previous_grad):
         num = LA.vector_norm(current_grad - previous_grad)
-        den: torch.Tensor = LA.vector_norm(model_vec - prev_model_vec)
+        den = LA.vector_norm(model_vec - prev_model_vec)
         lipschitz = num/np.maximum(den.numpy(),0.0001)
     else:
         num = LA.vector_norm(current_grad)
@@ -44,3 +44,14 @@ def compute_lipschitz_simple(current_grad:torch.Tensor, previous_grad:torch.Tens
         lipschitz = num/den
     return lipschitz
 
+
+def compute_convergance(current_grad: torch.Tensor, t_minus_one_grad: torch.Tensor, t_minus_two_grad: torch.Tensor):
+        """Function to compute the convergence values, only used for Telerig but also required by workers
+        """
+        if torch.sum(t_minus_one_grad) and torch.sum(t_minus_two_grad):
+            num = LA.vector_norm(current_grad - t_minus_one_grad)
+            den = LA.vector_norm(t_minus_one_grad - t_minus_two_grad)
+            convergance = num/den
+            return convergance
+        else:
+            return LA.vector_norm(current_grad)
