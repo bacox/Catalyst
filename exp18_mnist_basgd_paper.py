@@ -19,13 +19,13 @@ if __name__ == '__main__':
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 17: Run related work in MNIST dataset. Attacks: Negative gradient (magnitude=10) '
+    print('Exp 18: Run copy of the settings of the BaSGD paper. Attacks: Negative gradient (magnitude=10) '
           +'and random perbutation (alpha_atk = 0.2). Learning rate follows from learning rate sweep: exp 14.'
           +'SaSGD, BAGSD, Kardam')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp17_mnist_related_work_test_kardam'
+    exp_name = 'exp18_mnist_basgd_paper_n50'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -36,21 +36,21 @@ if __name__ == '__main__':
         configs = []
         model_name = 'mnist-cnn'
         dataset = 'mnist'
-        num_byz_nodes = [0, 5, 10]
-        num_rounds = 500
+        num_byz_nodes = [0, 5]
+        num_rounds = 2000 * 2
         idx = 1
         repetitions = 2
         exp_id = 0
-        server_lr = 0.05
+        server_lr = 0.1
         num_clients = 50
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
             [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         servers = [
-            # [AFL.SaSGD,{'learning_rate': server_lr}],
+            [AFL.SaSGD,{'learning_rate': server_lr}],
             [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15}]
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10}]
         ]
         f0_keys = []
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
             # print(server_name, attack_name)
             key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}'
             if f > 0:
-                exp_id += 5
+                exp_id += 1
                 configs.append({
                     'exp_id': exp_id,
                     'aggregation_type': 'async',
@@ -135,19 +135,18 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
 
-        # outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file)
-        AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file, clear_file=not args.autocomplete)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size)
 
-        # # Replace class names with strings for serialization
-        # for i in outputs:
-        #     i[1]['clients']['client'] = i[1]['clients']['client'].__name__
-        #     i[1]['clients']['f_type'] = i[1]['clients']['f_type'].__name__
-        #     i[1]['server'] = i[1]['server'].__name__
+        # Replace class names with strings for serialization
+        for i in outputs:
+            i[1]['clients']['client'] = i[1]['clients']['client'].__name__
+            i[1]['clients']['f_type'] = i[1]['clients']['f_type'].__name__
+            i[1]['server'] = i[1]['server'].__name__
 
-        # # Write raw data to file
-        # outputs += completed_runs
-        # with open(data_file, 'w') as f:
-        #     json.dump(outputs, f)
+        # Write raw data to file
+        outputs += completed_runs
+        with open(data_file, 'w') as f:
+            json.dump(outputs, f)
 
     # Load raw data from file
     outputs2 = ''
@@ -176,14 +175,14 @@ if __name__ == '__main__':
         if f:
             dfs.append(local_df)
         else:
-            for f in [1,2,5,10]:
+            for f in [5]:
                 local_df_update = local_df.copy()
                 local_df_update['f'] = f
                 dfs.append(local_df_update)
             # local_df = local_df.copy()
             # local_df['']
     server_df = pd.concat(dfs, ignore_index=True)
-    server_df = server_df[server_df['f'].isin([5,10])]
+    server_df = server_df[server_df['f'].isin([5])]
 
     dfs_server_age = []
     for out in outputs2:
@@ -210,7 +209,7 @@ if __name__ == '__main__':
     print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
-    g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='f', row='server_name', kind='line', errorbar=('ci', 25))
+    g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='server_name', kind='line', errorbar=('ci', 25))
     # g.set_axis_labels("Rounds", "Accuracy {row_name}")
     
     g.set_titles("F = {col_name}").tight_layout(w_pad=0)
