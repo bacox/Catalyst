@@ -55,17 +55,19 @@ class Kardam(Server):
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)
         self.grad_history[self.age] = grads.clone()
+        # print(f'Grad_history = {len(self.grad_history)}')
 
         # print(f'Model_staleness={model_staleness}, damp_factor={dampening_factor(model_staleness, alpha=self.damp_alpha)}')
-        grads = grads * dampening_factor(model_staleness, self.damp_alpha)
+        grads_dampened = grads * dampening_factor(model_staleness, self.damp_alpha)
         prev_model = flatten(self.network).detach().clone().cpu()
         current_model = flatten(self.network).detach().clone().cpu() * self.learning_rate * grads
         # current_model
 
-        self.k_pt = compute_lipschitz_simple(grads, self.prev_gradients, current_model, prev_model)
+        self.k_pt = compute_lipschitz_simple(grads_dampened, self.prev_gradients, current_model, prev_model)
         # self.k_pt = compute_lipschitz(self.model.version,self.grad_history,self.model.get_weights(),self.prev_weights)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         # print(f'k_pt: {self.k_pt}')
+        self.prune_grad_history()
         if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
             if self.frequency_check(_client_id):
@@ -74,6 +76,10 @@ class Kardam(Server):
                 self.bft_telemetry["accepted"][_client_id]["values"].append([self.k_pt,self.get_age()])
                 self.bft_telemetry["accepted"][_client_id]["total"] += 1
                 # return super().apply_gradients(gradient, _client_id)
+                # @TODO: Change this if it does not work!
+                alpha = dampening_factor(model_staleness, self.damp_alpha)
+                for g in self.optimizer.param_groups:
+                    g['lr'] = alpha
                 self.aggregate(grads)
                 return flatten(self.network)
             else:
@@ -94,6 +100,11 @@ class Kardam(Server):
         # self.aggregate(grads)
         # return flatten(self.network)
 
+    def prune_grad_history(self, size = 50):
+        for key_to_remove in sorted(list(self.grad_history.keys()), reverse=True)[size:]:
+            self.grad_history.pop(key_to_remove, None)
+        # print(len(self.grad_history))
+    
 
     def frequency_check(self,candidate_worker):
         """Function for the Frequency Filter"""

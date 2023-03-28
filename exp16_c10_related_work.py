@@ -118,7 +118,7 @@ if __name__ == '__main__':
                         'f_ct': [1] * f
                     },
                     'server': server[0],
-                    'server_args': server[0],
+                    'server_args': server[1],
                     'dataset_name': dataset,
                     'model_name': model_name
                 })
