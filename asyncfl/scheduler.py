@@ -1,10 +1,12 @@
 #
 # from .server import Server
 import copy
-from multiprocessing import Pool, current_process, RLock, Process
+import json
+from multiprocessing import Lock, Manager, Pool, current_process, RLock, Process
 from multiprocessing.pool import AsyncResult
+from pathlib import Path
 import traceback
-from typing import List
+from typing import List, Union
 import torch
 from tqdm.auto import tqdm
 from os import getpid
@@ -12,7 +14,7 @@ import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-
+import copy
 from asyncfl.dataloader import afl_dataset2
 from .network import get_model_by_name, model_gradients, flatten, unflatten_b, unflatten_g, flatten_g, unflatten
 from asyncfl.network import flatten
@@ -26,6 +28,12 @@ import asyncio
 import random
 from threading import Thread
 
+def dict_convert_class_to_strings(dictionary: dict):
+    d = copy.deepcopy(dictionary)
+    d['clients']['client'] = d['clients']['client'].__name__
+    d['clients']['f_type'] = d['clients']['f_type'].__name__
+    d['server'] = d['server'].__name__
+    return d
 
 class PoolManager():
 
@@ -326,10 +334,23 @@ class Scheduler:
         #     c.train()
 
     @staticmethod
-    def run_util(cfg):
+    def run_util(cfg_params):
+    # def run_util(cfg, outfile, lock):
+        """Run an experiment configuration
+        @TODO: Write result to file using rlock if file is provided
+        Args:
+            cfg (dict): _description_
+
+        Returns:
+            List[results, config (dict)]: _description_
+        """
+        cfg, outfile, lock = cfg_params
+        safe_cfg = dict_convert_class_to_strings(cfg)
+        # lock = tqdm.get_lock()
         try:
             sched = Scheduler(**cfg)
             num_rounds = cfg['num_rounds']
+            results = []
             if 'aggregation_type' in cfg and cfg['aggregation_type'] == 'sync':
                 # Run synchronous scheduler
                 worker_id = int(current_process()._identity[0])
@@ -338,24 +359,46 @@ class Scheduler:
                 cfg['client_participartion'] = cfg.get(
                     'client_participartion', 1.0)
                 # print('Running SYNC scheduler')
-                return [sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion']), cfg]
+                results = [[*sched.run_sync_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ', client_participation=cfg['client_participartion'])], safe_cfg]
             else:
                 # Default: Run asyn scheduler
                 # print('Running ASYNC scheduler')
                 worker_id = int(current_process()._identity[0])
-                return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
+                results = [[*sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] ')], safe_cfg]
+            if outfile:
+                if lock:
+                    lock.acquire()
+                completed_runs = []
+                outfile: Path
+                if Path(outfile).exists():
+                    with open(outfile, 'r') as f:
+                        completed_runs = json.load(f)
+                completed_runs.append(results)
+                with open(outfile, 'w') as f:
+                    json.dump(completed_runs, f)
+                if lock:
+                    lock.release()
+                    
+            return results
         except Exception as ex:
             print('Got an exception while running!!')
             print(traceback.format_exc())
 
     @staticmethod
-    def run_multiple(list_of_configs, pool_size=5):
+    def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file = False):
+        if clear_file and outfile and Path(outfile).exists():
+            Path(outfile).unlink()
         start_time = time.time()
         outputs = []
+        # m = Manager()
+        lock = tqdm.get_lock()
+        lock = None
+        print(f'Pool size = {pool_size}')
         pool = Pool(pool_size, initializer=tqdm.set_lock,
                     initargs=(tqdm.get_lock(),))
+        cfg_args = [(x, outfile, lock) for x in list_of_configs]
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks
-        outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, list_of_configs), total=len(
+        outputs = [x for x in tqdm(pool.imap_unordered(Scheduler.run_util, cfg_args), total=len(
             list_of_configs), position=0, leave=None, desc='Total') if x]
         print(
             f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")

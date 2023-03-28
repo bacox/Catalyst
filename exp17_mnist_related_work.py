@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp17_mnist_related_work'
+    exp_name = 'exp17_mnist_related_work_test'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -37,20 +37,20 @@ if __name__ == '__main__':
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         num_byz_nodes = [0, 5, 10]
-        num_rounds = 2000
+        num_rounds = 25
         idx = 1
         repetitions = 2
         exp_id = 0
         server_lr = 0.05
-        num_clients = 50
+        num_clients = 1
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
+            # [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         servers = [
             [AFL.SaSGD,{'learning_rate': server_lr}],
-            [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15}]
+            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15}]
         ]
         f0_keys = []
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
             # print(server_name, attack_name)
             key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}'
             if f > 0:
-                exp_id += 1
+                exp_id += 5
                 configs.append({
                     'exp_id': exp_id,
                     'aggregation_type': 'async',
@@ -135,18 +135,19 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
 
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size)
+        # outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file)
+        AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file, clear_file=not args.autocomplete)
 
-        # Replace class names with strings for serialization
-        for i in outputs:
-            i[1]['clients']['client'] = i[1]['clients']['client'].__name__
-            i[1]['clients']['f_type'] = i[1]['clients']['f_type'].__name__
-            i[1]['server'] = i[1]['server'].__name__
+        # # Replace class names with strings for serialization
+        # for i in outputs:
+        #     i[1]['clients']['client'] = i[1]['clients']['client'].__name__
+        #     i[1]['clients']['f_type'] = i[1]['clients']['f_type'].__name__
+        #     i[1]['server'] = i[1]['server'].__name__
 
-        # Write raw data to file
-        outputs += completed_runs
-        with open(data_file, 'w') as f:
-            json.dump(outputs, f)
+        # # Write raw data to file
+        # outputs += completed_runs
+        # with open(data_file, 'w') as f:
+        #     json.dump(outputs, f)
 
     # Load raw data from file
     outputs2 = ''
