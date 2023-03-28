@@ -172,14 +172,14 @@ if __name__ == '__main__':
         if f:
             dfs.append(local_df)
         else:
-            for f in [1,2,5,10]:
+            for f in [5,10]:
                 local_df_update = local_df.copy()
                 local_df_update['f'] = f
                 dfs.append(local_df_update)
             # local_df = local_df.copy()
             # local_df['']
     server_df = pd.concat(dfs, ignore_index=True)
-    server_df = server_df[server_df['f'].isin([1,2, 5,10])]
+    server_df = server_df[server_df['f'].isin([5,10])]
 
     dfs_server_age = []
     for out in outputs2:
