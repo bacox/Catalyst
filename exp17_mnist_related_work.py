@@ -31,7 +31,7 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
 
-        pool_size = 1
+        pool_size = 5
 
         configs = []
         model_name = 'mnist-cnn'
@@ -118,7 +118,7 @@ if __name__ == '__main__':
                         'f_ct': [1] * f
                     },
                     'server': server[0],
-                    'server_args': server[0],
+                    'server_args': server[1],
                     'dataset_name': dataset,
                     'model_name': model_name
                 })
