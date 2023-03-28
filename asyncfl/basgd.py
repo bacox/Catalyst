@@ -1,11 +1,12 @@
 
 
 import copy
+from typing import List
 import numpy as np
 import torch
 from asyncfl import Server
 from asyncfl.network import flatten, unflatten_g
-
+import sys
 
 class Buffer:
 
@@ -18,20 +19,20 @@ class Buffer:
         if self.N:
             # tmp_N = ((self.N - 1) / self.N)
             # print(type(((self.N - 1) / self.N)))
+            self.avg_gradient = ((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*gradient.detach().clone()
 
-
-            for idx, (avg_g, g) in enumerate(zip(self.avg_gradient, gradient)):
-                # Numpy version
-                # self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.copy()
-                # Torch version
-                self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.clone()
+            # for idx, (avg_g, g) in enumerate(zip(self.avg_gradient, gradient)):
+            #     # Numpy version
+            #     # self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.copy()
+            #     # Torch version
+            #     self.avg_gradient[idx] = ((self.N - 1) / self.N) * avg_g + (1/self.N)*g.clone()
 
             #     self.avg_gradient[idx] = ((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*g.copy()
             # self.avg_gradient = [((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*g.copy() for g in gradient]
             # self.avg_gradient =  (1/self.N)*gradient
             # self.avg_gradient =  2*gradient
         else:
-            self.avg_gradient = gradient
+            self.avg_gradient = gradient.detach().clone()
         self.N += 1
 
     def reset(self):
@@ -71,10 +72,9 @@ class BufferSet_G:
         return gradients
 
 class BufferSet:
-    pass
 
     def __init__(self, B):
-        self.buffers = []
+        self.buffers: List[Buffer] = []
         self.B = B
         # print(f'Value of B={B}')
         # Create all the buffers
@@ -85,27 +85,28 @@ class BufferSet:
 
     def receive(self, gradient, client_id):
         b = client_id % self.B
+        # print(f'Receive new gradient in buffer {client_id % self.B}')
         # print(f'Adding gradient from with pid={client_id} to buffer {b}')
         self.buffers[b].add(gradient)
+        # print('End receive')
+
 
     def nonEmpty(self):
         # Check if all the buffers have at least 1 gradient
-        for b in self.buffers:
+        for idx,b in enumerate(self.buffers):
             if not len(b):
+                print(f'buffer {idx} is empty\n')
                 return False
         return True
 
     def get_all_gradients(self):
-        # print(f'Number of buffers={self.B} and len-> {len(self.buffers)}')
-        gradients = [copy.deepcopy(b.avg_gradient) for b in self.buffers]
+        gradients = [x.avg_gradient for x in self.buffers]
         for b in self.buffers:
             b.reset()
-        # print(f'Buffers are empty? {not self.nonEmpty()}')
-        # return gradients
-        for x in gradients[0]:
-            np.array(x)
         return gradients
-        # return np.array(gradients)
+    
+    def __len__(self) -> int:
+        return sum([len(x) for x in self.buffers])
 
 
 def median_aggregation(list_of_gradients):
@@ -156,21 +157,26 @@ class BASGD(Server):
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
         grads = torch.from_numpy(gradients)
         # print(f'Got gradient from client {client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
+        # print('Hang here?')
         self.buffers.receive(grads, client_id)
         if self.buffers.nonEmpty():
+            # print(f'Aggregate! {len(self.buffers)} buffers')
             self.optimizer.zero_grad()
             buffer_gradients = self.buffers.get_all_gradients()
             if self.aggr_mode == 'median':
+                print('agg Median')
                 avg_grad = median_aggregation(buffer_gradients)
             elif self.aggr_mode == 'trmean':
                 avg_grad = trmean_aggregation(buffer_gradients, self.q)
             elif self.aggr_mode == 'krum':
                 avg_grad = krum_aggregation(buffer_gradients, self.q)
             else:
+                # print('Agg mean')
                 avg_grad = torch.mean(torch.stack(buffer_gradients), dim=0)
             # print(f'Aggregate!!!! --> {avg_grad}')
             # self.aggregate(avg_grad)
-            self.aggregate(buffer_gradients[0])
+            self.aggregate(avg_grad)
+        # print(f'Grads in bufferset: {len(self.buffers)}')
             
 
         return flatten(self.network)

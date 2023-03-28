@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import torch
 import copy
@@ -113,6 +114,7 @@ class Server:
         self.network.eval()
         correct = 0
         total = 0
+        loss: Any = None
 
         with torch.no_grad():
             for _batch_idx, (data, target) in enumerate(self.test_set):
