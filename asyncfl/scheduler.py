@@ -3,6 +3,7 @@
 import copy
 from multiprocessing import Pool, current_process, RLock, Process
 from multiprocessing.pool import AsyncResult
+import traceback
 from typing import List
 import torch
 from tqdm.auto import tqdm
@@ -345,7 +346,7 @@ class Scheduler:
                 return [sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f'[Worker {worker_id}] '), cfg]
         except Exception as ex:
             print('Got an exception while running!!')
-            print(ex)
+            print(traceback.format_exc())
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5):
