@@ -6,7 +6,7 @@ from multiprocessing import Lock, Manager, Pool, current_process, RLock, Process
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 import traceback
-from typing import List, Union
+from typing import Any, List, Union
 import torch
 from tqdm.auto import tqdm
 from os import getpid
@@ -120,7 +120,7 @@ class Scheduler:
     def get_server(self):
         return self.entities['server']
 
-    def get_clients(self):
+    def get_clients(self) -> List[Client]:
         return [item for (key, item) in self.entities.items() if key != 'server']
 
     def dereference(self, e_id):
@@ -177,8 +177,7 @@ class Scheduler:
             # print(f'Round {update_id}')
             num_clients = int(
                 np.max([1, np.floor(float(len(clients))*client_participation)]))
-            selected_clients = np.random.choice(
-                clients, num_clients, replace=False)
+            selected_clients = np.random.choice(clients, num_clients, replace=False) # type: ignore
             # print(f'Client participation: {num_clients}')
             if update_id % 5 == 0:
                 out = server.evaluate_accuracy()
@@ -190,6 +189,8 @@ class Scheduler:
 
             update_counter += len(clients)
             training_processes = []
+            client: Any = None
+            lipschitz = 0
             for local_id, client in enumerate(selected_clients):
 
                 client.move_to_gpu()
