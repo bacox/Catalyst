@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp17_mnist_related_work_test'
+    exp_name = 'exp17_mnist_related_work_test_kardam'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
@@ -37,19 +37,19 @@ if __name__ == '__main__':
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         num_byz_nodes = [0, 5, 10]
-        num_rounds = 25
+        num_rounds = 500
         idx = 1
         repetitions = 2
         exp_id = 0
         server_lr = 0.05
-        num_clients = 1
+        num_clients = 50
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            # [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
+            [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         servers = [
-            [AFL.SaSGD,{'learning_rate': server_lr}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
+            # [AFL.SaSGD,{'learning_rate': server_lr}],
+            [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15}]
         ]
         f0_keys = []
