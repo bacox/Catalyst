@@ -29,7 +29,7 @@ class Server:
         self.w_flat = flatten(self.network)
         self.prev_weights =  torch.zeros_like(self.w_flat)
         self.prev_gradients = torch.zeros_like(self.w_flat)
-        self.age = 0
+        self.age = 1
         self.lips = {}
         self.bft_telemetry = {
             "accepted": {
