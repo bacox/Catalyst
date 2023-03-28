@@ -194,10 +194,31 @@ if __name__ == '__main__':
         name = out[1]['name']
         local_df = pd.DataFrame(
             out[0][0], columns=['round', 'accuracy', 'loss'])
-        local_df['name'] = f"{name.split('-')[-1]}"
-        dfs.append(local_df)
+        parts = name.split('-')[-1].split('_')
+        # print(parts[2][2:])
+        lr = parts[2][2:]
+        f = int(parts[0][1:])
+        byz_type = 'None'
+        if f:
+            byz_type = parts[-1].upper()
+        # print(name, parts, " :: ", byz_type)
+        local_df['f'] = f
+        local_df['lr'] = float(lr)
+        local_df['byz_type'] = byz_type
+        local_df['name'] = '-'.join([f'f{f}', byz_type])
+        if f:
+            dfs.append(local_df)
+        else:
+            for f in [1,2,5,10]:
+                local_df_update = local_df.copy()
+                local_df_update['f'] = f
+                dfs.append(local_df_update)
+        # local_df['name'] = f"{name.split('-')[-1]}"
+        # dfs.append(local_df)
     server_df = pd.concat(dfs, ignore_index=True)
+    server_df = server_df[server_df['f'].isin([5,10])]
 
+    sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
     dfs_server_age = []
     for out in outputs2:
         name = out[1]['name']
@@ -207,15 +228,56 @@ if __name__ == '__main__':
         dfs_server_age.append(local_df)
     model_age_df = pd.concat(dfs_server_age, ignore_index=True)
 
-    graph_file = graphs_path / f'{exp_name}.png'
+    # graph_file = graphs_path / f'{exp_name}_lr001.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # g = sns.lineplot(data=server_df[server_df['lr']==0.01], x='round', y='accuracy', hue='name')
+    # plt.title('Effects of byzantine nodes. Cifar10, 50 nodes, lr=0.01')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Test accuracy')
+    # g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # plt.close(fig)
+
+    # graph_file = graphs_path / f'{exp_name}_lr005.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # g = sns.lineplot(data=server_df[server_df['lr']==0.05], x='round', y='accuracy', hue='name')
+    # plt.title('Effects of byzantine nodes. Cifar10, 50 nodes, lr=0.05')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Test accuracy')
+    # g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # plt.close(fig)
+
+
+    graph_file = graphs_path / f'{exp_name}_splitted_lr001.png'
     print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
-    g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name')
-    plt.title('SA - Mitigation. Cifar100 - ResNet9')
+    g = sns.relplot(data=server_df[server_df['lr']==0.01], x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
+    g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
+    g.legend.set_title('Attack')
+    g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
+    g.fig.suptitle('Effects of byzantine nodes. Cifar10, 50 nodes, lr=0.01')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
-    g.legend_.set_title(None)
+    plt.savefig(graph_file)
+    plt.close(fig)
+
+    graph_file = graphs_path / f'{exp_name}_splitted_lr005.png'
+    print(f'Generating plot: {graph_file}')
+    # Visualize data
+    fig = plt.figure(figsize=(8, 6))
+    g = sns.relplot(data=server_df[server_df['lr']==0.05], x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
+    g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
+    g.legend.set_title('Attack')
+    g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
+    g.fig.suptitle('Effects of byzantine nodes. Cifar10, 50 nodes, lr=0.05')
+    plt.xlabel('Rounds')
+    plt.ylabel('Test accuracy')
     plt.savefig(graph_file)
     plt.close(fig)
 
