@@ -17,7 +17,7 @@ from .task import Task
 import numpy as np
 import time
 from threading import Thread
-
+import logging
 
 def dict_convert_class_to_strings(dictionary: dict):
     d = copy.deepcopy(dictionary)
@@ -254,6 +254,7 @@ class Scheduler:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+                logging.info(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
             client: Client = clients[client_id]
 
             client.move_to_gpu()
@@ -374,16 +375,19 @@ class Scheduler:
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False):
+        logging.basicConfig(format='%(asctime)s - %(levelname)s:%(message)s', level=logging.DEBUG, filename='debug.log')
+        # install_mp_handler()
         if clear_file and outfile and Path(outfile).exists():
-            print(f'Clearing existing output file "{Path(outfile).name}"')
+            logging.info(f'Clearing existing output file "{Path(outfile).name}"')
             Path(outfile).unlink()
         start_time = time.time()
         outputs = []
         lock = tqdm.get_lock()
         lock = None
-        print(f"Pool size = {pool_size}")
+        logging.info(f"Pool size = {pool_size}")
         pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
         cfg_args = [(x, outfile, lock) for x in list_of_configs]
+        # with logging_redirect_tqdm():
         # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks?
         outputs = [
             x

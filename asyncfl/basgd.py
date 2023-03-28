@@ -95,7 +95,7 @@ class BufferSet:
         # Check if all the buffers have at least 1 gradient
         for idx,b in enumerate(self.buffers):
             if not len(b):
-                print(f'buffer {idx} is empty\n')
+                # print(f'buffer {idx} is empty\n')
                 return False
         return True
 

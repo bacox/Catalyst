@@ -3,7 +3,7 @@ from typing import List
 
 import torch
 import numpy as np
-
+import logging
 from asyncfl.util import compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
