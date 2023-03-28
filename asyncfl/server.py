@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 import torch
 import copy
@@ -29,6 +30,7 @@ class Server:
         self.w_flat = flatten(self.network)
         self.prev_weights =  torch.zeros_like(self.w_flat)
         self.prev_gradients = torch.zeros_like(self.w_flat)
+        self.prev_prev_gradients = torch.zeros_like(self.w_flat)
         self.age = 1
         self.lips = {}
         self.bft_telemetry = {
@@ -105,12 +107,14 @@ class Server:
         self.prev_weights = flatten(self.network)
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
+        self.prev_prev_gradients = self.prev_gradients.clone()
         self.prev_gradients = client_gradients
 
     def evaluate_accuracy(self):
         self.network.eval()
         correct = 0
         total = 0
+        loss: Any = None
 
         with torch.no_grad():
             for _batch_idx, (data, target) in enumerate(self.test_set):
