@@ -5,7 +5,7 @@ import math
 import numpy as np
 import torch
 
-from asyncfl.util import compute_lipschitz, compute_lipschitz_simple
+from asyncfl.util import compute_lipschitz_simple
 # class Damper:
 #     """Simple class for Kardam's staleness-aware dampening component"""
 #     def __init__(self,function="EXPONENT",enabled=True,logging= logging.basicConfig()):
@@ -67,7 +67,7 @@ class Kardam(Server):
         # self.k_pt = compute_lipschitz(self.model.version,self.grad_history,self.model.get_weights(),self.prev_weights)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         # print(f'k_pt: {self.k_pt}')
-        self.prune_grad_history()
+        self.prune_grad_history(size=4)
         if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
             if self.frequency_check(_client_id):
