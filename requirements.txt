@@ -9,3 +9,4 @@ torchaudio==0.13.1
 prettyprint
 graphviz
 pytest
+scikit-learn

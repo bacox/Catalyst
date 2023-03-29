@@ -27,12 +27,15 @@ from asyncfl.util import compute_lipschitz_simple
 #             self.logger.debug(f"Dampening Staleness Value = {result}")
 #             return result
 
-def dampening_factor(tau, alpha = 0.2):
+def dampening_factor(tau, alpha = 0.2, active=True):
     """
     enable multiple versions of bijective function
     param: function: architecture to enable the use of different bijective function.
     """
-    return math.exp(-alpha*tau)
+    if active:
+        return math.exp(-alpha*tau)
+    else:
+        return 1
 
 
 class Kardam(Server):

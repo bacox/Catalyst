@@ -29,7 +29,7 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
 
-        pool_size = 3
+        pool_size = 1
 
         configs = []
         model_name = 'mnist-cnn'
