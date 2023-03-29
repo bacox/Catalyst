@@ -161,6 +161,7 @@ if __name__ == '__main__':
             out[0][0], columns=['round', 'accuracy', 'loss'])
         # local_df['name'] = f"{name.split('-')[-1]}"
         parts = name.split('-')[-1].split('_')
+        server_name = name.split('-')[0]
         f = int(parts[0][1:])
         byz_type = 'None'
         if f:
@@ -169,17 +170,18 @@ if __name__ == '__main__':
         local_df['f'] = f
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
+        local_df['server_name'] = server_name
         if f:
             dfs.append(local_df)
         else:
-            for f in [1,2,5,10]:
+            for f in [5,10]:
                 local_df_update = local_df.copy()
                 local_df_update['f'] = f
                 dfs.append(local_df_update)
             # local_df = local_df.copy()
             # local_df['']
     server_df = pd.concat(dfs, ignore_index=True)
-    server_df = server_df[server_df['f'].isin([1,2, 5,10])]
+    server_df = server_df[server_df['f'].isin([5,10])]
 
     dfs_server_age = []
     for out in outputs2:
@@ -202,15 +204,31 @@ if __name__ == '__main__':
     plt.savefig(graph_file)
     plt.close(fig)
 
+    # graph_file = graphs_path / f'{exp_name}_splitted.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
+    # g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
+    # g.legend.set_title('Attack')
+    # g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
+    # g.fig.suptitle(f'Effects of byzantine nodes. MNIST, 50 nodes, lr=0.1')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Test accuracy')
+    # plt.savefig(graph_file)
+    # plt.close(fig)
+
     graph_file = graphs_path / f'{exp_name}_splitted.png'
     print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
-    g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
-    g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
+    g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', row='f', col='server_name', kind='line', errorbar=('ci', 25))
+    # g.set_axis_labels("Rounds", "Accuracy {row_name}")
+    
+    g.set_titles("F = {col_name}").tight_layout(w_pad=0)
     g.legend.set_title('Attack')
     g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
-    g.fig.suptitle(f'Effects of byzantine nodes. MNIST, 50 nodes, lr=0.1')
+    g.fig.suptitle(f'Effects of byzantine nodes. Cifar10, 50 nodes, lr=0.1')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     plt.savefig(graph_file)
