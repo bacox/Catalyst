@@ -330,7 +330,10 @@ class Scheduler:
             results = []
             if "aggregation_type" in cfg and cfg["aggregation_type"] == "sync":
                 # Run synchronous scheduler
-                worker_id = int(current_process()._identity[0])
+                try:
+                    worker_id = int(current_process()._identity[0])
+                except:
+                    worker_id = 0
 
                 # worker_id = 1
                 cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
@@ -349,7 +352,10 @@ class Scheduler:
             else:
                 # Default: Run asyn scheduler
                 # print('Running ASYNC scheduler')
-                worker_id = int(current_process()._identity[0])
+                try:
+                    worker_id = int(current_process()._identity[0])
+                except:
+                    worker_id = 0
                 results = [
                     [*sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f"[Worker {worker_id}] ")],
                     safe_cfg,
@@ -384,22 +390,26 @@ class Scheduler:
         outputs = []
         lock = tqdm.get_lock()
         lock = None
-        logging.info(f"Pool size = {pool_size}")
-        pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
         cfg_args = [(x, outfile, lock) for x in list_of_configs]
-        # with logging_redirect_tqdm():
-        # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks?
-        outputs = [
-            x
-            for x in tqdm(
-                pool.imap_unordered(Scheduler.run_util, cfg_args),
-                total=len(list_of_configs),
-                position=0,
-                leave=None,
-                desc="Total",
-            )
-            if x
-        ]
+        logging.info(f"Pool size = {pool_size}")
+        if pool_size > 1:
+            pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
+            
+            # with logging_redirect_tqdm():
+            # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks?
+            outputs = [
+                x
+                for x in tqdm(
+                    pool.imap_unordered(Scheduler.run_util, cfg_args),
+                    total=len(list_of_configs),
+                    position=0,
+                    leave=None,
+                    desc="Total",
+                )
+                if x
+            ]
+        else:
+            outputs = [Scheduler.run_util(x) for x in cfg_args]
         print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return outputs
 

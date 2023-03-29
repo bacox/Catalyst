@@ -28,7 +28,7 @@ class Telerig(Kardam):
         @TODO: Add global score and use that in the lipschitz_check
         """
         
-        self.lips[_client_id] = client_lipschitz.numpy()
+        # self.lips[_client_id] = client_lipschitz.numpy()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)
         self.grad_history[self.age] = grads.clone()
@@ -52,6 +52,7 @@ class Telerig(Kardam):
 
 
         # @TODO: Do lipschitz reputation check
+        self.update_lip(_client_id, client_lipschitz, self.conv)
         if self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age()):
         # if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
@@ -82,6 +83,7 @@ class Telerig(Kardam):
 
         Return: Boolean: True if gradient is valid, False if not
         """
+        candidate_grad = candidate_grad.numpy()
         self.epoch = epoch
         valid = False
         # temporal dampening
@@ -97,13 +99,21 @@ class Telerig(Kardam):
             worker_grads = [[(data["lips"]),epoch] for _,data in self.lips.items()]
 
         # create array of the workers local scores and the global score
-        incoming_data = np.append(worker_grads,[[candidate_grad,epoch]],axis=0)
+        if len(worker_grads):
+            logging.debug('Append incoming data')
+            incoming_data = np.append(worker_grads,[[candidate_grad,epoch]],axis=0)
+        else:
+            logging.debug('Overwrite incoming data')
+            incoming_data = np.array([[candidate_grad,epoch]])
+
         # logging.debug(f"incoming data {incoming_data} at epoch {epoch}")
 
         # add the previously accepted gradients to incoming data
         if not accepted_grads:
+            logging.debug('overwrite current_data')
             current_data = incoming_data
         else:
+            logging.debug('Append current data')
             current_data = np.append(accepted_grads,incoming_data,axis=0)
 
         # making the labels binary, -1 for anomaly, 1 for a cluster
@@ -116,8 +126,9 @@ class Telerig(Kardam):
         else:
             # performance check to determine acceptance
             performance = (self.logit(r)) + labels[-1]
+            logging.debug(f'Labels: {labels}')
             
-            logging.debug(f"{r}:{labels[-1]} : {performance} ")
+            logging.debug(f"Performance check! {r}:{labels[-1]} : {performance} ")
 
             if performance >= 0:
                 valid = True
@@ -126,7 +137,7 @@ class Telerig(Kardam):
 
         for key,item in self.worker_history.items():
             logging.debug(f"worker {key} reputation {item['reputation']}")
-
+        logging.debug(f'Valid ? {valid}')
         return valid
     
     def update_rep(self,performance,id):
@@ -174,5 +185,6 @@ class Telerig(Kardam):
         logging.debug(f"epsilon={self.eps}")
         # fit data to DBSCAN
         clusters = DBSCAN(eps=self.eps, min_samples=int(max_samples)).fit(data_ss)
+        logging.debug(f'Clusters: {clusters.labels_}, {data_ss}, {data}')
         # return labels
         return clusters.labels_
