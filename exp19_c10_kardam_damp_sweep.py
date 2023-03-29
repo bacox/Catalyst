@@ -25,7 +25,7 @@ if __name__ == '__main__':
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp19_c10_damp_sweep'
+    exp_name = 'exp19_c10_damp_sweep_mem_test'
     data_file = data_path / f'{exp_name}.json'
 
     if not args.o:
