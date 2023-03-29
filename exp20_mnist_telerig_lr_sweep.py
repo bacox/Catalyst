@@ -29,25 +29,37 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
 
-        pool_size = 1
+        pool_size = 4
 
         configs = []
         model_name = 'mnist-cnn'
         dataset = 'mnist'
-        num_byz_nodes = [0]
+        num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 150
+        num_rounds = 300
         idx = 1
-        repetitions = 2
+        repetitions = 1
         exp_id = 0
         server_lr = 0.05
         num_clients = 10
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            # [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
+            [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
+        
         servers = [
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.05}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.1}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.25}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.0}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.5}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 3.0}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 3.5}],
+
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
         ]
         f0_keys = []
 
@@ -55,7 +67,7 @@ if __name__ == '__main__':
             # print(_r, f, n, s_lr, model_name)
             server_name = server[0].__name__
             attack_name = atk[0].__name__
-            key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]["damp_alpha"]}'
+            key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]["damp_alpha"]}_eps{server[1]["eps"]}'
             # if key_name not in f0_keys:
             #     f0_keys.append(key_name)
             exp_id += 1
@@ -118,6 +130,8 @@ if __name__ == '__main__':
     with open(data_file, 'r') as f:
         outputs2 = json.load(f)
 
+    if not args.o:
+        exit()
     # Process data into dataframe
     dfs = []
     for out in outputs2:
@@ -134,52 +148,52 @@ if __name__ == '__main__':
         local_df['f'] = f
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
-        if f:
-            dfs.append(local_df)
-        else:
-            for f in [1,2,5,10]:
-                local_df_update = local_df.copy()
-                local_df_update['f'] = f
-                dfs.append(local_df_update)
+        local_df['name'] = parts[-1]
+        dfs.append(local_df)
+        # else:
+        #     for f in [1,2,5,10]:
+        #         local_df_update = local_df.copy()
+        #         local_df_update['f'] = f
+        #         dfs.append(local_df_update)
             # local_df = local_df.copy()
             # local_df['']
     server_df = pd.concat(dfs, ignore_index=True)
-    server_df = server_df[server_df['f'].isin([1,2, 5,10])]
+    # server_df = server_df[server_df['f'].isin([1,2, 5,10])]
 
-    dfs_server_age = []
-    for out in outputs2:
-        name = out[1]['name']
-        local_df = pd.DataFrame(
-            out[0][1], columns=['round', 'client', 'model_age'])
-        local_df['name'] = f"{name.split('-')[-1]}"
-        dfs_server_age.append(local_df)
-    model_age_df = pd.concat(dfs_server_age, ignore_index=True)
+    # dfs_server_age = []
+    # for out in outputs2:
+    #     name = out[1]['name']
+    #     local_df = pd.DataFrame(
+    #         out[0][1], columns=['round', 'client', 'model_age'])
+    #     local_df['name'] = f"{name.split('-')[-1]}"
+    #     dfs_server_age.append(local_df)
+    # model_age_df = pd.concat(dfs_server_age, ignore_index=True)
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
     graph_file = graphs_path / f'{exp_name}.png'
     print(f'Generating plot: {graph_file}')
     # Visualize data
     fig = plt.figure(figsize=(8, 6))
-    g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name',errorbar=('ci', 25))
-    plt.title('Effect of Byzantine Nodes')
+    g = sns.lineplot(data=server_df, x='round', y='accuracy', hue='name',errorbar=('ci', 95))
+    plt.title('Telerig')
     plt.xlabel('Rounds')
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
     plt.savefig(graph_file)
     plt.close(fig)
 
-    graph_file = graphs_path / f'{exp_name}_splitted.png'
-    print(f'Generating plot: {graph_file}')
-    # Visualize data
-    fig = plt.figure(figsize=(8, 6))
-    g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
-    g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
-    g.legend.set_title('Attack')
-    g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
-    g.fig.suptitle(f'Effects of byzantine nodes. MNIST, 50 nodes, lr=0.1')
-    plt.xlabel('Rounds')
-    plt.ylabel('Test accuracy')
-    plt.savefig(graph_file)
-    plt.close(fig)
+    # graph_file = graphs_path / f'{exp_name}_splitted.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=(8, 6))
+    # g = sns.relplot(data=server_df, x='round', y='accuracy', hue='byz_type', col='f', kind='line', errorbar=('ci', 25))
+    # g.set_axis_labels("Rounds", "Accuracy").set_titles("F = {col_name}").tight_layout(w_pad=0)
+    # g.legend.set_title('Attack')
+    # g.fig.subplots_adjust(top=0.8) # adjust the Figure in g
+    # g.fig.suptitle(f'Effects of byzantine nodes. MNIST, 50 nodes, lr=0.1')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Test accuracy')
+    # plt.savefig(graph_file)
+    # plt.close(fig)
 
     # graph_file = graphs_path / f'{exp_name}_model_age.png'
     # print(f'Generating plot: {graph_file}')

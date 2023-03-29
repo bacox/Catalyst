@@ -13,13 +13,13 @@ from asyncfl.util import compute_convergance, compute_lipschitz_simple
 
 class Telerig(Kardam):
 
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2) -> None:
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2, eps: float = 2.5) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate, damp_alpha)
         self.conv = True
         self.rep = True
-        self.eps = 2.5
+        self.eps = eps
         self.accepted_lips = []
-        self.min_samples = 2
+        self.min_samples = 3
         self.worker_history = {i:{"reputation":math.exp(0)/(1+math.exp(0))} for i in range(n)}
 
     
@@ -29,7 +29,8 @@ class Telerig(Kardam):
         """
         
         # self.lips[_client_id] = client_lipschitz.numpy()
-        model_staleness = (self.get_age() + 1) - gradient_age
+        # model_staleness = (self.get_age() + 1) - gradient_age
+        model_staleness = gradient_age
         grads = torch.from_numpy(gradients)
         self.grad_history[self.age] = grads.clone()
         grads_dampened = grads * dampening_factor(model_staleness, self.damp_alpha)
@@ -42,7 +43,7 @@ class Telerig(Kardam):
 
         # compute global score, condition for when the convergence is infinity. Can occur during optimal slowdown
         if math.isinf(global_conv):
-            global_score = 0
+            global_score = torch.zeros_like(global_conv)
         else:
             global_score = (self.k_pt*global_conv)
         
@@ -52,7 +53,7 @@ class Telerig(Kardam):
 
 
         # @TODO: Do lipschitz reputation check
-        self.update_lip(_client_id, client_lipschitz, self.conv)
+        self.update_lip(_client_id, client_lipschitz, global_conv)
         if self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age()):
         # if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
@@ -63,13 +64,16 @@ class Telerig(Kardam):
                 alpha = dampening_factor(model_staleness, self.damp_alpha)
                 for g in self.optimizer.param_groups:
                     g['lr'] = alpha
+                # logging.debug(f'Aggregating grads from {_client_id} with lr {alpha}, eps: {self.eps}, damp_alpha:{self.damp_alpha}')
                 self.aggregate(grads)
                 return flatten(self.network)
             else:
+                logging.debug(f'[1] Rejecting grads from {_client_id}')
                 self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt,self.get_age()])
                 self.bft_telemetry["rejected"][_client_id]["total"] += 1
                 return flatten(self.network)
         else:
+            logging.debug(f'[2] Rejecting grads from {_client_id}')
             self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt,self.get_age()])
             self.bft_telemetry["rejected"][_client_id]["total"] += 1
             return flatten(self.network)
@@ -83,7 +87,10 @@ class Telerig(Kardam):
 
         Return: Boolean: True if gradient is valid, False if not
         """
+        # logging.debug(f'Candidate score from client {worker_id} = {candidate_grad}')
         candidate_grad = candidate_grad.numpy()
+        if np.isnan(candidate_grad):
+            candidate_grad = 0
         self.epoch = epoch
         valid = False
         # temporal dampening
@@ -100,23 +107,24 @@ class Telerig(Kardam):
 
         # create array of the workers local scores and the global score
         if len(worker_grads):
-            logging.debug('Append incoming data')
+            # logging.debug(f'Append incoming data: {candidate_grad} : {worker_grads}')
             incoming_data = np.append(worker_grads,[[candidate_grad,epoch]],axis=0)
         else:
-            logging.debug('Overwrite incoming data')
+            # logging.debug('Overwrite incoming data')
             incoming_data = np.array([[candidate_grad,epoch]])
 
         # logging.debug(f"incoming data {incoming_data} at epoch {epoch}")
 
         # add the previously accepted gradients to incoming data
         if not accepted_grads:
-            logging.debug('overwrite current_data')
+            # logging.debug(f'overwrite current_data: {accepted_grads}')
             current_data = incoming_data
         else:
-            logging.debug('Append current data')
+            # logging.debug('Append current data')
             current_data = np.append(accepted_grads,incoming_data,axis=0)
 
         # making the labels binary, -1 for anomaly, 1 for a cluster
+        # logging.debug(f'Current_data = {current_data}')
         labels = np.array(self.detect_anomalies(current_data,len(worker_grads)))
         labels[labels != -1] = 1
 
@@ -126,18 +134,18 @@ class Telerig(Kardam):
         else:
             # performance check to determine acceptance
             performance = (self.logit(r)) + labels[-1]
-            logging.debug(f'Labels: {labels}')
-            
-            logging.debug(f"Performance check! {r}:{labels[-1]} : {performance} ")
+            # logging.debug(f'Labels: {labels}')
+            # 
+            # logging.debug(f"Performance check! {r}:{labels[-1]} : {performance} ")
 
             if performance >= 0:
                 valid = True
 
             self.update_rep(performance,worker_id)
 
-        for key,item in self.worker_history.items():
-            logging.debug(f"worker {key} reputation {item['reputation']}")
-        logging.debug(f'Valid ? {valid}')
+        # for key,item in self.worker_history.items():
+            # logging.debug(f"worker {key} reputation {item['reputation']}")
+        # logging.debug(f'Valid ? {valid}')
         return valid
     
     def update_rep(self,performance,id):
@@ -147,14 +155,17 @@ class Telerig(Kardam):
         param: id: id of worker
         """
         sig_temp = self.sigmoid(self.temporal)
-        logging.debug(f"updating reputation with performance = {performance} and temporal dampening = {sig_temp}")
+        # logging.debug(f"updating reputation with performance = {performance} and temporal dampening = {sig_temp}")
         r = self.sigmoid(performance * sig_temp)
         self.worker_history[id]["reputation"] = r
 
     def update_lip(self, worker, lip, conv):
         # update the Lipschitz and convergence values for a worker
-        if math.isnan(conv):
-            conv = 0.0
+        # if math.isnan(conv):
+        #     conv = 0.0
+        lip = torch.nan_to_num(lip)
+        conv = torch.nan_to_num(conv)
+        # logging.debug(f'Adding Lip: {lip}, conv: {conv}')
         self.lips.update({worker:{"lips":lip,"conv":conv}})
     
     def sigmoid(self,x):
@@ -181,10 +192,15 @@ class Telerig(Kardam):
         else:
             max_samples = ( 1/3*(active_workers))
 
-        logging.debug(f"min_samples={int(max_samples)}")
-        logging.debug(f"epsilon={self.eps}")
+        # logging.debug(f"min_samples={int(max_samples)}")
+        # logging.debug(f"epsilon={self.eps}")
         # fit data to DBSCAN
-        clusters = DBSCAN(eps=self.eps, min_samples=int(max_samples)).fit(data_ss)
-        logging.debug(f'Clusters: {clusters.labels_}, {data_ss}, {data}')
+        max_samples = max(int(max_samples),1)
+        clusters = DBSCAN(eps=self.eps, min_samples=max_samples).fit(data_ss)
+        if clusters.labels_[-1] < 0:
+            c2 = DBSCAN(eps=max(self.eps-0.5, 0.1), min_samples=max_samples).fit(data_ss)
+            c3 = DBSCAN(eps=self.eps+0.5, min_samples=max_samples).fit(data_ss)
+            logging.debug(f'Anomaly! eps: {max(self.eps-0.5, 0.1)} = {c2.labels_} and {self.eps+.5} = {c3.labels_}')
+        # logging.debug(f'Clusters: {clusters.labels_}, {data_ss}, {data}')
         # return labels
         return clusters.labels_
