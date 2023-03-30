@@ -31,14 +31,14 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
 
-        pool_size = 6
+        pool_size = 2
 
         configs = []
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 500
+        num_rounds = 25
         idx = 1
         repetitions = 1
         exp_id = 0
@@ -51,10 +51,8 @@ if __name__ == '__main__':
         
         servers = [
             [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.05}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.0}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.5}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 3.0}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 3.5}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
             [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
 
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
@@ -140,7 +138,7 @@ if __name__ == '__main__':
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
         local_df['name'] = parts[-1]
-        local_bft_df = pd.DataFrame(out[0][2], columns=['action', 'client_id', 'lipschitz', 'round', 'is_byzantine'])
+        local_bft_df = pd.DataFrame(out[0][2], columns=['action', 'client_id', 'lipschitz', 'round', 'is_byzantine', 'performance', 'global_score'])
         local_bft_df['name'] = name
         bft_dfs.append(local_bft_df)
         dfs.append(local_df)
@@ -163,24 +161,35 @@ if __name__ == '__main__':
     plt.close(fig)
 
 
-    graph_file = graphs_path / f'{exp_name}_byz.png'
+    graph_file = graphs_path / f'{exp_name}_byz_perf.png'
     print(f'Generating plot: {graph_file}')
     sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    g = sns.relplot(data=bft_stats_df, x="round", y="performance", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
+    axes = g.axes.flatten()
+    for ax in axes:
+        ax.axhline(0.0, ls='--', linewidth=1, color='red')
+    plt.savefig(graph_file)
+    plt.close(fig)
 
-    # Visualize data
-    # fig = plt.figure(figsize=(12, 6))
-    # fig = plt.figure(figsize=(16, 6))
+    graph_file = graphs_path / f'{exp_name}_byz_lips.png'
+    print(f'Generating plot: {graph_file}')
+    sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    g = sns.relplot(data=bft_stats_df, x="round", y="lipschitz", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
+    plt.yscale('log')
+    # axes = g.axes.flatten()
+    # for ax in axes:
+    #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
+    plt.savefig(graph_file)
+    plt.close(fig)
 
-    g = sns.FacetGrid(data=bft_stats_df,  row="name", height=2, aspect=6)
-    g.map_dataframe(sns.scatterplot, x='round', y='lipschitz', hue='action',  style="is_byzantine")
-    g.add_legend()
-    # g = sns.scatterplot()
-    # g = sns.scatterplot(data=bft_stats_df, x='round', y='lipschitz', hue='action',  style="is_byzantine")
-    # plt.title('Telerig BFT')
-    # plt.xlabel('Rounds')
-    # plt.ylabel('Lipschitz value')
-    # plt.yscale('log')
-    # g.legend_.set_title(None)
+    graph_file = graphs_path / f'{exp_name}_byz_global_score.png'
+    print(f'Generating plot: {graph_file}')
+    sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    g = sns.relplot(data=bft_stats_df, x="round", y="global_score", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
+    plt.yscale('log')
+    # axes = g.axes.flatten()
+    # for ax in axes:
+    #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
     plt.savefig(graph_file)
     plt.close(fig)
 

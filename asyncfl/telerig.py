@@ -54,11 +54,12 @@ class Telerig(Kardam):
 
         # @TODO: Do lipschitz reputation check
         self.update_lip(_client_id, client_lipschitz, global_conv)
-        if self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age()):
+        valid_lipschitz, performance = self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age())
+        if valid_lipschitz:
         # if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
             if self.frequency_check(_client_id):
-                self.bft_telemetry.append(['accepted', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+                self.bft_telemetry.append(['accepted', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine, performance, global_score.cpu().numpy().tolist()])
                 # self.bft_telemetry["accepted"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
                 # self.bft_telemetry["accepted"][_client_id]["total"] += 1
                 # @TODO: Change this if it does not work!
@@ -70,13 +71,13 @@ class Telerig(Kardam):
                 return flatten(self.network)
             else:
                 logging.debug(f'[1] Rejecting grads from {_client_id}')
-                self.bft_telemetry.append(['rejected_frequency', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+                self.bft_telemetry.append(['rejected_frequency', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine, performance, global_score.cpu().numpy().tolist()])
                 # self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
                 # self.bft_telemetry["rejected"][_client_id]["total"] += 1
                 return flatten(self.network)
         else:
             logging.debug(f'[2] Rejecting grads from {_client_id}')
-            self.bft_telemetry.append(['rejected_lipschitz', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+            self.bft_telemetry.append(['rejected_lipschitz', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine, performance, global_score.cpu().numpy().tolist()])
             # self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
             # self.bft_telemetry["rejected"][_client_id]["total"] += 1
             return flatten(self.network)
@@ -90,6 +91,7 @@ class Telerig(Kardam):
 
         Return: Boolean: True if gradient is valid, False if not
         """
+        performance = 0
         # logging.debug(f'Candidate score from client {worker_id} = {candidate_grad}')
         candidate_grad = candidate_grad.numpy()
         if np.isnan(candidate_grad):
@@ -149,7 +151,7 @@ class Telerig(Kardam):
         # for key,item in self.worker_history.items():
             # logging.debug(f"worker {key} reputation {item['reputation']}")
         # logging.debug(f'Valid ? {valid}')
-        return valid
+        return valid, performance
     
     def update_rep(self,performance,id):
         """
