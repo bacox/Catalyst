@@ -7,6 +7,7 @@ class NGClient(Client):
     # def __init__(self, pid, num_clients, dataset_name: str, model_name: str, magnitude=10):
         super().__init__(pid, num_clients, dataset, model_name, sampler, sampler_args, learning_rate)
         self.magnitude = magnitude
+        self.is_byzantine = True
 
 
     def get_gradients(self):
@@ -18,4 +19,4 @@ class NGClient(Client):
 
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz , self.local_age]
+        return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz , self.local_age, self.is_byzantine]

@@ -31,17 +31,15 @@ class Client:
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
         self.lipschitz = None
-        # print(f'Client {self.pid} has {len(self.train_set)} data samples to train')
+        self.is_byzantine = False
 
     def get_pid(self):
-        # print(f'My PID is: {self.pid}')
         return self.pid
 
     def print_pid_and_var(self, extra_text):
         print(f'My pid is {self.pid} + "{extra_text}"')
 
     def set_weights(self, weights, age: int):
-        # print('Setting weigths')
         self.local_age = age
         self.network.load_state_dict(copy.deepcopy(weights))
 
@@ -56,7 +54,7 @@ class Client:
     
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz , self.local_age]
+        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz , self.local_age, self.is_byzantine]
     
 
     def set_weight_vectors(self, weights: np.ndarray, age):

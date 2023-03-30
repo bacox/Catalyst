@@ -8,6 +8,7 @@ class RDCLient(Client):
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, a_atk=0.2):
         super().__init__(pid, num_clients, dataset, model_name, sampler, sampler_args, learning_rate)
         self.a_atk = a_atk
+        self.is_byzantine = True
 
 
     def get_gradients(self):
@@ -18,7 +19,7 @@ class RDCLient(Client):
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
         g = self.g_flat.cpu()
-        return [torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy(), flatten_b(self.network), self.lipschitz , self.local_age]
+        return [torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy(), flatten_b(self.network), self.lipschitz , self.local_age, self.is_byzantine]
 
 class NGClient(Client):
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, magnitude=10):

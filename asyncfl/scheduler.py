@@ -147,7 +147,7 @@ class Scheduler:
         def train_client(self, client: Client, local_id, num_batches=-1):
             client.move_to_gpu()
             client.train(num_batches=num_batches)
-            c_gradients, c_buffers, age = client.get_gradient_vectors()
+            c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
             self.gradient_responses[local_id] = c_gradients
             self.buffer_responses[local_id] = c_buffers
             client.move_to_cpu()
@@ -178,7 +178,7 @@ class Scheduler:
             for local_id, client in enumerate(selected_clients):
                 client.move_to_gpu()
                 client.train(num_batches=1)
-                c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
+                c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
                 gradients.append(c_gradients)
                 buffers.append(c_buffers)
                 client.move_to_cpu()
@@ -263,7 +263,7 @@ class Scheduler:
             if use_weight_avg:
                 server.set_weights(client.network.state_dict())
             else:
-                c_gradients, c_buffers, lipschitz, age = client.get_gradient_vectors()
+                c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
                 server.incr_age()
                 gradient_age = server.get_age() - age
                 model_age_stats.append([update_id, client.pid, gradient_age])

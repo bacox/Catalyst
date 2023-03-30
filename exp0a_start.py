@@ -31,7 +31,7 @@ if __name__ == '__main__':
         dataset = 'mnist'
         f = 3  # number of byzantine clients
         # num_rounds = 50*10
-        num_rounds = 300
+        num_rounds = 50
         idx = 1
         repetitions = 2
         limit = 100
@@ -184,7 +184,7 @@ if __name__ == '__main__':
                 # @TODO: Append to output instead of overwriting
                 # print(configs)
             # exit()
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=4)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=2)
 
         # Replace class names with strings for serialization
         for i in outputs:
