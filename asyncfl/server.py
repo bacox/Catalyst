@@ -33,20 +33,21 @@ class Server:
         self.prev_prev_gradients = torch.zeros_like(self.w_flat)
         self.age = 1
         self.lips = {}
-        self.bft_telemetry = {
-            "accepted": {
-                i: {
-                    "values":[],
-                    "total":0
-                } for i in range(n)
-            }, 
-            "rejected" : {
-                i: {
-                    "values":[],
-                    "total":0
-                } for i in range(n)
-            }
-        }
+        self.bft_telemetry = []
+        # self.bft_telemetry = {
+        #     "accepted": {
+        #         i: {
+        #             "values":[],
+        #             "total":0
+        #         } for i in range(n)
+        #     }, 
+        #     "rejected" : {
+        #         i: {
+        #             "values":[],
+        #             "total":0
+        #         } for i in range(n)
+        #     }
+        # }
 
     def set_weights(self, weights):
         self.network.load_state_dict(copy.deepcopy(weights))
@@ -70,7 +71,7 @@ class Server:
     def incr_age(self):
         self.age += 1
 
-    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
+    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int, is_byzantine: bool):
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)

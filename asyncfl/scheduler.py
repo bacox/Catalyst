@@ -196,7 +196,7 @@ class Scheduler:
                 #     # stacked = torch.stack(self.buffer_responses)
                 avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, lipschitz, server.get_age())
+            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, lipschitz, server.get_age(), is_byzantine)
             # new_model_weights_vector = server.get_model_weights()
             for client in clients:
                 client.move_to_gpu()
@@ -207,7 +207,7 @@ class Scheduler:
                 # new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
                 # client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
                 # client.move_to_cpu()
-        return server_metrics, []
+        return server_metrics, [], server.bft_telemetry
 
     def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
         """
@@ -268,11 +268,11 @@ class Scheduler:
                 gradient_age = server.get_age() - age
                 model_age_stats.append([update_id, client.pid, gradient_age])
                 unflatten_b(server.network, c_buffers)
-                new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, lipschitz, gradient_age)
+                new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, lipschitz, gradient_age, is_byzantine)
                 client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
 
-        return server_metrics, model_age_stats
+        return server_metrics, model_age_stats, server.bft_telemetry
 
         # Plot data
 

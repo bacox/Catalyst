@@ -154,7 +154,7 @@ class BASGD(Server):
         self.aggr_mode = aggr_mode
         self.q = q
 
-    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
+    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int, is_byzantine: bool):
         grads = torch.from_numpy(gradients)
         # print(f'Got gradient from client {client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         # print('Hang here?')

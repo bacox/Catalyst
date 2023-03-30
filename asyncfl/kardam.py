@@ -53,7 +53,7 @@ class Kardam(Server):
         self.client_history = []
 
     
-    def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int):
+    def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int, is_byzantine: bool):
         self.lips[_client_id] = client_lipschitz.numpy()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)
@@ -76,8 +76,9 @@ class Kardam(Server):
             if self.frequency_check(_client_id):
                 # print('Accept')
                 # self.logger.info("Gradient Accepted")
-                self.bft_telemetry["accepted"][_client_id]["values"].append([self.k_pt,self.get_age()])
-                self.bft_telemetry["accepted"][_client_id]["total"] += 1
+                self.bft_telemetry.append(['accepted', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+                # self.bft_telemetry["accepted"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
+                # self.bft_telemetry["accepted"][_client_id]["total"] += 1
                 # return super().apply_gradients(gradient, _client_id)
                 # @TODO: Change this if it does not work!
                 alpha = dampening_factor(model_staleness, self.damp_alpha)
@@ -88,15 +89,17 @@ class Kardam(Server):
             else:
                 # print('Reject frequency')
                 # self.logger.info(f"Gradient Rejected: Too many successive gradients from Worker {_client_id}")
-                self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt,self.get_age()])
-                self.bft_telemetry["rejected"][_client_id]["total"] += 1
+                self.bft_telemetry.append(['rejected_frequency', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+                # self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
+                # self.bft_telemetry["rejected"][_client_id]["total"] += 1
                 # return self.model.get_weights()
                 return flatten(self.network)
         else:
             # print('Reject')
             # self.logger.info(f"Gradient from worker {_client_id} Rejected by Lipshcitz Filter")
-            self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt,self.get_age()])
-            self.bft_telemetry["rejected"][_client_id]["total"] += 1
+            self.bft_telemetry.append(['rejected_lipschitz', _client_id, self.k_pt.cpu().numpy().tolist(), self.get_age(), is_byzantine])
+            # self.bft_telemetry["rejected"][_client_id]["values"].append([self.k_pt.cpu().numpy().tolist(),self.get_age()])
+            # self.bft_telemetry["rejected"][_client_id]["total"] += 1
             return flatten(self.network)
             # return self.model.get_weights()
 
