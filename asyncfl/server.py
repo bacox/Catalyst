@@ -71,7 +71,7 @@ class Server:
     def incr_age(self):
         self.age += 1
 
-    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int, is_byzantine: bool):
+    def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
@@ -109,7 +109,7 @@ class Server:
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
         self.prev_prev_gradients = self.prev_gradients.clone()
-        self.prev_gradients = client_gradients
+        self.prev_gradients = client_gradients.clone()
 
     def evaluate_accuracy(self):
         self.network.eval()

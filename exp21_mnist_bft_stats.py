@@ -38,7 +38,7 @@ if __name__ == '__main__':
         dataset = 'mnist'
         num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 25
+        num_rounds = 100
         idx = 1
         repetitions = 1
         exp_id = 0
@@ -53,6 +53,8 @@ if __name__ == '__main__':
             [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.05}],
             [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
+            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.0}],
             [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
 
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
@@ -186,7 +188,8 @@ if __name__ == '__main__':
     print(f'Generating plot: {graph_file}')
     sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
     g = sns.relplot(data=bft_stats_df, x="round", y="global_score", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
-    plt.yscale('log')
+    plt.ylim(0,20)
+    # plt.yscale('log')
     # axes = g.axes.flatten()
     # for ax in axes:
     #     ax.axhline(0.0, ls='--', linewidth=1, color='red')

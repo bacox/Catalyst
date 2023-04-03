@@ -19,4 +19,4 @@ class NGClient(Client):
 
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz , self.local_age, self.is_byzantine]
+        return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz, self.convergance, self.local_age, self.is_byzantine]

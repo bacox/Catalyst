@@ -53,7 +53,7 @@ class Kardam(Server):
         self.client_history = []
 
     
-    def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, gradient_age: int, is_byzantine: bool):
+    def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
         self.lips[_client_id] = client_lipschitz.numpy()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)

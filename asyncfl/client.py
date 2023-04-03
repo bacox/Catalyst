@@ -4,7 +4,7 @@ from typing import List
 import torch
 import numpy as np
 import logging
-from asyncfl.util import compute_lipschitz_simple
+from asyncfl.util import compute_convergance, compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
 
@@ -30,8 +30,14 @@ class Client:
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
-        self.lipschitz = None
+        # self.lipschitz = None
+        self.lipschitz = 0
+        self.convergance = 0
         self.is_byzantine = False
+
+        self.prev_weights =  torch.zeros_like(self.w_flat)
+        self.prev_gradients = torch.zeros_like(self.w_flat)
+        self.prev_prev_gradients = torch.zeros_like(self.w_flat)
 
     def get_pid(self):
         return self.pid
@@ -54,7 +60,7 @@ class Client:
     
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz , self.local_age, self.is_byzantine]
+        return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz, self.convergance , self.local_age, self.is_byzantine]
     
 
     def set_weight_vectors(self, weights: np.ndarray, age):
@@ -105,7 +111,11 @@ class Client:
         self.w_flat = flatten(self.network)
 
         prev_weights = self.w_flat.detach().clone()
-        prev_gradients = self.g_flat.detach().clone()
+        # prev_gradients = self.g_flat.detach().clone()
+
+        self.prev_prev_gradients = self.prev_gradients.clone()
+        self.prev_gradients = self.g_flat.detach().clone()
+
 
         g_flat_local = torch.zeros_like(self.w_flat)
         self.g_flat = torch.zeros_like(self.w_flat)
@@ -126,7 +136,10 @@ class Client:
                 break
             # print(self.g_flat)
         current_weights = flatten(self.network)
-        self.lipschitz = compute_lipschitz_simple(self.g_flat.cpu(), prev_gradients.cpu(), current_weights.cpu(), prev_weights.cpu())
+
+        
+        self.lipschitz = compute_lipschitz_simple(self.g_flat.cpu(), self.prev_gradients.cpu(), current_weights.cpu(), prev_weights.cpu())
+        self.convergance = compute_convergance(self.g_flat, self.prev_gradients, self.prev_prev_gradients)
 
 
 

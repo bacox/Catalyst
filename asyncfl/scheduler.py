@@ -175,10 +175,12 @@ class Scheduler:
             training_processes = []
             client: Any = None
             lipschitz = 0
+            client_convergence = 0
+            is_byzantine = False
             for local_id, client in enumerate(selected_clients):
                 client.move_to_gpu()
                 client.train(num_batches=1)
-                c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
+                c_gradients, c_buffers, lipschitz, client_convergence, age, is_byzantine = client.get_gradient_vectors()
                 gradients.append(c_gradients)
                 buffers.append(c_buffers)
                 client.move_to_cpu()
@@ -196,7 +198,7 @@ class Scheduler:
                 #     # stacked = torch.stack(self.buffer_responses)
                 avg_buffers = torch.mean(stacked, dim=0)
             unflatten_b(server.network, avg_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, lipschitz, server.get_age(), is_byzantine)
+            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, lipschitz, client_convergence, server.get_age(), is_byzantine)
             # new_model_weights_vector = server.get_model_weights()
             for client in clients:
                 client.move_to_gpu()
@@ -263,12 +265,12 @@ class Scheduler:
             if use_weight_avg:
                 server.set_weights(client.network.state_dict())
             else:
-                c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
+                c_gradients, c_buffers, lipschitz, client_convergence, age, is_byzantine = client.get_gradient_vectors()
                 server.incr_age()
                 gradient_age = server.get_age() - age
                 model_age_stats.append([update_id, client.pid, gradient_age])
                 unflatten_b(server.network, c_buffers)
-                new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, lipschitz, gradient_age, is_byzantine)
+                new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, lipschitz, client_convergence, gradient_age, is_byzantine)
                 client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
             client.move_to_cpu()
 
