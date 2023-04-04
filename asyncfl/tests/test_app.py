@@ -29,6 +29,10 @@ def numbers():
 
 
 class TestApp:
+    def test_addition(self, numbers):
+        res = add(*numbers)
+        assert res == numbers[0] + numbers[1]
+
     def test_multiplication(self, numbers):
         res = multiply_by_two(numbers[0])
         assert res == numbers[1]
