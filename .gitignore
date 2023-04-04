@@ -3,6 +3,8 @@ cifar-100-python
 .vscode
 *local.md
 .idea
+venv_install
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
