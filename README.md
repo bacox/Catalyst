@@ -28,3 +28,19 @@ You just create a new model out of client weights.
 | BASGD  | Yes    |
 | Kardam | Yes    |
 |Telerig | No     |
+
+
+### Build
+
+```bash
+python3 -m pip install --upgrade build
+python3 -m build
+```
+
+### Install
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install .
+```
