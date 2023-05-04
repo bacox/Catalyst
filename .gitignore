@@ -3,6 +3,7 @@ cifar-100-python
 .vscode
 *local.md
 .idea
+.debug
 venv_install
 
 # Byte-compiled / optimized / DLL files

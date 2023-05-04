@@ -7,9 +7,9 @@ import torch
 import logging
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
-
+from pathlib import Path
 from asyncfl.util import compute_convergance, compute_lipschitz_simple
-
+import yaml
 
 class Telerig(Kardam):
 
@@ -22,6 +22,29 @@ class Telerig(Kardam):
         self.min_samples = 3
         self.worker_history = {i:{"reputation":math.exp(0)/(1+math.exp(0))} for i in range(n)}
 
+        self.debug_updates_enabled = True
+        if self.debug_updates_enabled:
+            self.update_debug_path = Path(__file__).parent.parent / '.debug'
+            self.update_debug_path.mkdir(exist_ok=True, parents=True)
+            self.update_debug_file_path = self.update_debug_path / 'debug_updates.yaml'
+            self.update_debug_file_path.unlink(missing_ok=True)
+            self.update_debug_file_path.touch()
+            
+
+
+    def write_debug_update(self, **values):
+        if not self.debug_updates_enabled:
+            return
+        logging.debug(f'Write client update to file: {list(values.values())}')
+        debug_data = None 
+        with open(self.update_debug_file_path, 'r+') as infile:
+            debug_data = yaml.safe_load(infile)
+            logging.info(f'Debug_data: {debug_data}')
+        with open(self.update_debug_file_path, 'w+') as outfile:
+            if not debug_data:
+                debug_data = {'updates': [], 'keys': list(values.keys())}
+            debug_data['updates'].append(list(values.values()))
+            yaml.dump(debug_data, outfile)
     
     def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
         """
@@ -30,6 +53,8 @@ class Telerig(Kardam):
         
         # self.lips[_client_id] = client_lipschitz.numpy()
         # model_staleness = (self.get_age() + 1) - gradient_age
+
+
         model_staleness = gradient_age
         grads = torch.from_numpy(gradients)
         self.grad_history[self.age] = grads.clone()
@@ -50,11 +75,24 @@ class Telerig(Kardam):
         if not self.conv:
             global_score = self.k_pt
 
-
-
+        
         # @TODO: Do lipschitz reputation check
         self.update_lip(_client_id, client_lipschitz, client_convergence)
-        valid_lipschitz, performance = self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age())
+        valid_lipschitz, performance, debug_data = self.lipschitz_reputation_check(global_score, self.accepted_lips, _client_id , self.get_age())
+        
+        # Write debug data on updates to a file! Only use in single thread debugging!
+        self.write_debug_update(
+            server_age=self.get_age(),
+            client_id=_client_id, 
+            age=gradient_age, 
+            byzantine=is_byzantine, 
+            p_kt=self.k_pt.numpy().tolist(), 
+            global_conv=global_conv.numpy().tolist(), 
+            global_score=global_score.numpy().tolist(), 
+            accepted_lips=self.accepted_lips,
+            **debug_data)
+
+
         if valid_lipschitz:
         # if self.lipschitz_check(self.k_pt, self.hack):
             # call the apply gradients from the extended ps after gradient has been checked
@@ -127,7 +165,7 @@ class Telerig(Kardam):
         else:
             # logging.debug('Append current data')
             current_data = np.append(accepted_grads,incoming_data,axis=0)
-
+        debug_data = {'current_data': current_data.tolist(), 'len_workers': len(worker_grads)}
         # making the labels binary, -1 for anomaly, 1 for a cluster
         # logging.debug(f'Current_data = {current_data}')
         labels = np.array(self.detect_anomalies(current_data,len(worker_grads)))
@@ -151,7 +189,7 @@ class Telerig(Kardam):
         # for key,item in self.worker_history.items():
             # logging.debug(f"worker {key} reputation {item['reputation']}")
         # logging.debug(f'Valid ? {valid}')
-        return valid, performance
+        return valid, performance, debug_data
     
     def update_rep(self,performance,id):
         """
@@ -188,8 +226,12 @@ class Telerig(Kardam):
         Return: array of labels to the data"""
 
         # scaling the data
+        logging.info('Data:')
+        logging.info(data)
         ss = StandardScaler()
-        data_ss = ss.fit_transform(data)     
+        data_ss = ss.fit_transform(data)
+        logging.info('Data_ss')
+        logging.info(data_ss)     
         if self.min_samples == 2:  
             max_samples = ( 2/3*(active_workers+3))
         elif self.min_samples == 1:
