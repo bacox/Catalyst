@@ -11,3 +11,4 @@ prettyprint
 graphviz
 pytest
 scikit-learn
+hdbscan

@@ -7,3 +7,4 @@ from .basgd import BASGD
 from .kardam import Kardam
 from .telerig import Telerig
 from .sa_sgd import SaSGD
+from .sa_sgd_perfect_byz import SaSGDPerfectByz

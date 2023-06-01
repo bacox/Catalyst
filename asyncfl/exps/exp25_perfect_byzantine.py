@@ -15,15 +15,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-o", "-omit", help="Omit running experiment",
                         action="store_true")
+    parser.add_argument("-s", "--show-plots", help="Show generated plots",
+                    action="store_true")
     parser.add_argument('-a', '--autocomplete',
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 21: Test the bft stats using the mnist dataset')
+    print('Exp 25: Do a "perfect" byzantine run')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp21_mnist_bft_stats'
+    exp_name = 'exp25_perfect_byzantine'
     data_file = data_path / f'{exp_name}.json'
 
     # args.o = True
@@ -31,18 +33,18 @@ if __name__ == '__main__':
     if not args.o:
         # Define configurations
 
-        pool_size = 2
+        pool_size = 4
 
         configs = []
         model_name = 'mnist-cnn'
         dataset = 'mnist'
-        num_byz_nodes = [2]
+        num_byz_nodes = [3]
         # num_byz_nodes = [0]
         num_rounds = 100
         idx = 1
-        repetitions = 1
+        repetitions = 3
         exp_id = 0
-        server_lr = 0.05
+        server_lr = 0.1
         num_clients = 10
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
@@ -50,7 +52,7 @@ if __name__ == '__main__':
         ]
         
         servers = [
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.05}],
+            [AFL.SaSGDPerfectByz,{'learning_rate': server_lr}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
@@ -65,10 +67,7 @@ if __name__ == '__main__':
             # print(_r, f, n, s_lr, model_name)
             server_name = server[0].__name__
             attack_name = atk[0].__name__
-            if server_name != 'Kardam':
-                key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]["damp_alpha"]}_eps{server[1]["eps"]}'
-            else:
-                key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]["damp_alpha"]}_eps0'
+            key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]}'
             # if key_name not in f0_keys:
             #     f0_keys.append(key_name)
             exp_id += 1
@@ -118,6 +117,12 @@ if __name__ == '__main__':
 
     if not args.o:
         exit()
+    
+    show_plots = False
+    if args.show_plots:
+        show_plots = True
+
+
     # Process data into dataframe
     dfs = []
     bft_dfs = []
@@ -156,39 +161,47 @@ if __name__ == '__main__':
     plt.ylabel('Test accuracy')
     g.legend_.set_title(None)
     plt.savefig(graph_file)
+    if show_plots:
+        plt.show()
     plt.close(fig)
 
 
-    graph_file = graphs_path / f'{exp_name}_byz_perf.png'
-    print(f'Generating plot: {graph_file}')
-    sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
-    g = sns.relplot(data=bft_stats_df, x="round", y="performance", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
-    axes = g.axes.flatten()
-    for ax in axes:
-        ax.axhline(0.0, ls='--', linewidth=1, color='red')
-    plt.savefig(graph_file)
-    plt.close(fig)
-
-    graph_file = graphs_path / f'{exp_name}_byz_lips.png'
-    print(f'Generating plot: {graph_file}')
-    sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
-    g = sns.relplot(data=bft_stats_df, x="round", y="lipschitz", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
-    plt.yscale('log')
+    # graph_file = graphs_path / f'{exp_name}_byz_perf.png'
+    # print(f'Generating plot: {graph_file}')
+    # sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    # g = sns.relplot(data=bft_stats_df, x="round", y="performance", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
     # axes = g.axes.flatten()
     # for ax in axes:
     #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
-    plt.savefig(graph_file)
-    plt.close(fig)
+    # plt.savefig(graph_file)
+    # if show_plots:
+    #     plt.show()
+    # plt.close(fig)
 
-    graph_file = graphs_path / f'{exp_name}_byz_global_score.png'
-    print(f'Generating plot: {graph_file}')
-    sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
-    g = sns.relplot(data=bft_stats_df, x="round", y="global_score", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
-    plt.ylim(0,20)
+    # graph_file = graphs_path / f'{exp_name}_byz_lips.png'
+    # print(f'Generating plot: {graph_file}')
+    # sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    # g = sns.relplot(data=bft_stats_df, x="round", y="lipschitz", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
     # plt.yscale('log')
-    # axes = g.axes.flatten()
-    # for ax in axes:
-    #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
-    plt.savefig(graph_file)
-    plt.close(fig)
+    # # axes = g.axes.flatten()
+    # # for ax in axes:
+    # #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
+    # plt.savefig(graph_file)
+    # if show_plots:
+    #     plt.show()
+    # plt.close(fig)
+
+    # graph_file = graphs_path / f'{exp_name}_byz_global_score.png'
+    # print(f'Generating plot: {graph_file}')
+    # sns.set_theme(style="white", palette="Dark2", font_scale=1, rc={"lines.linewidth": 2.5}) # type: ignore
+    # g = sns.relplot(data=bft_stats_df, x="round", y="global_score", height=2, aspect=6, hue="action", row='name', style='is_byzantine')
+    # plt.ylim(0,20)
+    # # plt.yscale('log')
+    # # axes = g.axes.flatten()
+    # # for ax in axes:
+    # #     ax.axhline(0.0, ls='--', linewidth=1, color='red')
+    # plt.savefig(graph_file)
+    # if show_plots:
+    #     plt.show()
+    # plt.close(fig)
 
