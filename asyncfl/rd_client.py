@@ -1,8 +1,8 @@
 import torch
 
 from asyncfl import Client
-from asyncfl.network import flatten_b, model_gradients
-
+from asyncfl.network import flatten, flatten_b, model_gradients, unflatten
+import logging
 
 class RDCLient(Client):
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, a_atk=0.2):
@@ -10,6 +10,14 @@ class RDCLient(Client):
         self.a_atk = a_atk
         self.is_byzantine = True
 
+
+    def train(self, num_batches=-1):
+        logging.info(f'[Client {self.pid}] Running RD_Client training loop, a_atk={self.a_atk}')
+        super().train(num_batches)
+        weight_vector = flatten(self.network)
+        g = self.g_flat.cpu()
+        inversed_weights = weight_vector * (torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy())
+        unflatten(self.network, inversed_weights)
 
     def get_gradients(self):
         # @TODO: Fix this, make it compatible with the super call!

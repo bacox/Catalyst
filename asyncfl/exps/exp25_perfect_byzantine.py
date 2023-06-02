@@ -40,19 +40,22 @@ if __name__ == '__main__':
         dataset = 'mnist'
         num_byz_nodes = [3]
         # num_byz_nodes = [0]
-        num_rounds = 100
+        num_rounds = 50
         idx = 1
-        repetitions = 3
+        repetitions = 1
         exp_id = 0
         server_lr = 0.1
+        # server_lr = 0.5
         num_clients = 10
         attacks = [
-            [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            # [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
+            # [AFL.NGClient, {'magnitude': 100,'sampler': 'uniform','sampler_args': {}}],
+            [AFL.RDCLient, {'a_atk':0.5, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         
         servers = [
             [AFL.SaSGDPerfectByz,{'learning_rate': server_lr}],
+            [AFL.SaSGD,{'learning_rate': server_lr}],
+            # [AFL.Server,{'learning_rate': server_lr}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
@@ -67,7 +70,8 @@ if __name__ == '__main__':
             # print(_r, f, n, s_lr, model_name)
             server_name = server[0].__name__
             attack_name = atk[0].__name__
-            key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_da{server[1]}'
+            key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_{server_name}'
+            #da{server[1]}'
             # if key_name not in f0_keys:
             #     f0_keys.append(key_name)
             exp_id += 1

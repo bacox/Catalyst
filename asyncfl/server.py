@@ -6,6 +6,50 @@ from .dataloader import afl_dataloader, afl_dataset
 from .client import Client
 from .network import get_model_by_name, model_gradients, flatten, unflatten_g
 
+def fed_avg(parameters, sizes = []):
+    if not sizes:
+        sizes = [1] * len(parameters)
+    new_params = {}
+    sum_size = 0
+    for client in parameters:
+        for name in parameters[client].keys():
+            try:
+                new_params[name].data += (parameters[client][name].data * sizes[client])
+            except:
+                new_params[name] = (parameters[client][name].data * sizes[client])
+        sum_size += sizes[client]
+
+    for name in new_params:
+        # @TODO: Is .long() really required?
+        new_params[name].data = new_params[name].data.long() / sum_size
+    return new_params
+
+def get_update(update, model):
+    '''get the update weight'''
+    update2 = {}
+    for key, var in update.items():
+        update2[key] = update[key] - model[key]
+    return update2
+
+
+def no_defense_update(params, global_parameters, learning_rate=1):
+    total_num = len(params)
+    sum_parameters = None
+    for i in range(total_num):
+        if sum_parameters is None:
+            sum_parameters = {}
+            for key, var in params[i].items():
+                sum_parameters[key] = var.clone()
+        else:
+            for var in sum_parameters:
+                sum_parameters[var] = sum_parameters[var] + params[i][var]
+    for var in global_parameters:
+        if var.split('.')[-1] == 'num_batches_tracked':
+            global_parameters[var] = params[0][var]
+            continue
+        global_parameters[var] += learning_rate*(sum_parameters[var] / total_num)
+
+    return global_parameters
 
 class Server:
 
@@ -14,6 +58,7 @@ class Server:
         self.clients = []
         self.n = n
         self.f = f
+        self.model_history = [] # Indexed by time t
         self.test_set = afl_dataloader(
             dataset, use_iter=False, client_id=0, n_clients=1, data_type='test')
         # self.dataset =
@@ -31,9 +76,10 @@ class Server:
         self.prev_weights =  torch.zeros_like(self.w_flat)
         self.prev_gradients = torch.zeros_like(self.w_flat)
         self.prev_prev_gradients = torch.zeros_like(self.w_flat)
-        self.age = 1
+        self.age = 0
         self.lips = {}
         self.bft_telemetry = []
+        self.model_history.append(self.get_model_weights())
         # self.bft_telemetry = {
         #     "accepted": {
         #         i: {
@@ -70,6 +116,19 @@ class Server:
 
     def incr_age(self):
         self.age += 1
+
+    def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
+        server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+        update_params = get_update(weights, self.model_history[server_model_age])
+
+        # Aggregate
+        # alpha = self.learning_rate / float(gradient_age)
+        self.set_weights(no_defense_update([update_params], self.get_model_weights()))
+        self.model_history.append(self.get_model_weights())
+        self.incr_age()
+        return self.get_model_weights()
+
+        
 
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
         client_gradients = torch.from_numpy(gradients)

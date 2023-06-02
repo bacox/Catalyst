@@ -11,7 +11,7 @@ import copy
 from asyncfl.dataloader import afl_dataset2
 from .network import flatten, unflatten_b, unflatten
 from asyncfl.network import flatten
-from .server import Server
+from .server import Server, fed_avg
 from .client import Client
 from .task import Task
 import numpy as np
@@ -25,7 +25,6 @@ def dict_convert_class_to_strings(dictionary: dict):
     d["clients"]["f_type"] = d["clients"]["f_type"].__name__
     d["server"] = d["server"].__name__
     return d
-
 
 class PoolManager:
     def __init__(self, processes=None, initializer=None, initargs=(), maxtasksperchild=None, context=None) -> None:
@@ -137,20 +136,137 @@ class Scheduler:
             rc["ct_left"] = rc["ct"]
             clients[rc["_id"]] = rc
         return sequence
+    
+    
+    # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
+    # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
+    def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async'):
+        
+        if fl_type != 'sync':
+            # Compute the clients server interactions
+            if not ct_clients:
+                ct_clients = [1] * len(self.get_clients())
+
+            interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
+            interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
+                :num_rounds
+            ]
+        
+        # Create entities
+        clients: List[Client] = self.get_clients()
+        server: Server = self.get_server()
+
+        # Setup clients
+        initial_weights = flatten(server.network)
+        model_age = server.get_age()
+        for c in clients:
+            unflatten(c.network, initial_weights.detach().clone())
+
+        # To keep track of the metrics
+        server_metrics = []
+        model_age_stats = []
+        bft_telemetry = []
+
+        # Iterate rounds
+        if fl_type == 'sync':
+            server_metrics, bft_telemetry = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = -1, test_frequency=5)
+        else:
+            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=5)
+
+
+        return server_metrics, model_age_stats, bft_telemetry
+
+    def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=25):
+        # Play all the server interactions
+        server_metrics = []
+        model_age_stats = []
+        for update_id, client_id in enumerate(
+            pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
+        ):
+            if update_id % test_frequency == 0:
+                out = server.evaluate_accuracy()
+                server_metrics.append([update_id, out[0], out[1]])
+                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+                logging.info(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+            
+            client: Client = clients[client_id]
+            client.move_to_gpu()
+            client.train(num_batches=batch_limit)
+            is_byzantine = client.is_byzantine
+            client_age = client.local_age
+            agg_weights = server.client_weight_update(client_id, client.get_weights(),client_age, is_byzantine)
+            client.set_weights(agg_weights, server.get_age())
+            client.move_to_cpu()
+            model_age_stats.append([update_id, client.pid, client_age])
+
+        return server_metrics, model_age_stats, server.bft_telemetry
+
+    def _sync_exec_loop(self, num_rounds: int, server: Server, clients, client_participation,  position = 0, add_descr='', batch_limit = -1, test_frequency=5):
+        server_metrics = []
+        update_counter = 0 # Keep track of the number of total updates from clients
+        agg_weights = server.get_model_weights()
+        for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None)):
+            # Client selection
+            num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
+            selected_clients = np.random.choice(clients, num_clients, replace=False)  # type: ignore
+            
+            # Send models to clients
+            for client in clients:
+                client.move_to_gpu()
+                client.set_weights(agg_weights, server.get_age())
+                client.move_to_cpu()
+
+            # Test progress
+            if update_id % test_frequency == 0:
+                out = server.evaluate_accuracy()
+                server_metrics.append([update_id, out[0], out[1]])
+                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+            
+            client_weights = []
+            byz_clients = []
+            for _local_id, client in enumerate(selected_clients):
+                client.move_to_gpu()
+                client.train(num_batches=batch_limit)
+                is_byzantine = client.is_byzantine
+                c_id = client.pid()
+                client_weights.append(client.get_weights())
+                byz_clients.append(c_id, is_byzantine)
+                client.move_to_cpu()
+            
+            # Aggregate
+            agg_weights = fed_avg(client_weights)
+            server.set_weights(agg_weights)
+            server.incr_age()
+        
+        return server_metrics, server.bft_telemetry
+
 
     def run_sync_tasks(
         self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0
     ):
+        """To run Synchronous Federated Learning.
+
+        Args:
+            num_rounds (_type_): _description_
+            ct_clients (list, optional): _description_. Defaults to [].
+            progress_disabled (bool, optional): _description_. Defaults to False.
+            position (int, optional): _description_. Defaults to 0.
+            add_descr (str, optional): _description_. Defaults to "".
+            client_participation (float, optional): _description_. Defaults to 1.0.
+
+        Returns:
+            _type_: _description_
+        """
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
 
-        def train_client(self, client: Client, local_id, num_batches=-1):
-            client.move_to_gpu()
-            client.train(num_batches=num_batches)
-            c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
-            self.gradient_responses[local_id] = c_gradients
-            self.buffer_responses[local_id] = c_buffers
-            client.move_to_cpu()
+        # def train_client(self, client: Client, local_id, num_batches=-1):
+        #     client.move_to_gpu()
+        #     client.train(num_batches=num_batches)
+        #     c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
+        #     self.gradient_responses[local_id] = c_gradients
+        #     self.buffer_responses[local_id] = c_buffers
+        #     client.move_to_cpu()
 
         initial_weights = flatten(server.network)
         model_age = server.get_age()
@@ -213,6 +329,7 @@ class Scheduler:
 
     def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
         """
+        To run Asynchronous Federated Learning
         @TODO: Put dict of interaction sequence as argument
         @TODO: Save participation statistics of the clients and plot this in a graph.
         @TODO: Keep track of the model staleness (age), and plot this in a graph
@@ -330,38 +447,57 @@ class Scheduler:
             sched = Scheduler(**cfg)
             num_rounds = cfg["num_rounds"]
             results = []
-            if "aggregation_type" in cfg and cfg["aggregation_type"] == "sync":
-                # Run synchronous scheduler
-                try:
-                    worker_id = int(current_process()._identity[0])
-                except:
-                    worker_id = 0
+            try:
+                worker_id = int(current_process()._identity[0])
+            except:
+                worker_id = 0
+            cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
+            cfg["aggregation_type"] = cfg.get("aggregation_type", "async")
+            results = [
+                [
+                    *sched.execute(
+                        num_rounds,
+                        position=worker_id,
+                        add_descr=f"[Worker {worker_id}] ",
+                        client_participation=cfg["client_participartion"],
+                        fl_type=cfg["aggregation_type"]
+                    )
+                ],
+                safe_cfg,
+            ]
 
-                # worker_id = 1
-                cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
-                # print('Running SYNC scheduler')
-                results = [
-                    [
-                        *sched.run_sync_tasks(
-                            num_rounds,
-                            position=worker_id,
-                            add_descr=f"[Worker {worker_id}] ",
-                            client_participation=cfg["client_participartion"],
-                        )
-                    ],
-                    safe_cfg,
-                ]
-            else:
-                # Default: Run asyn scheduler
-                # print('Running ASYNC scheduler')
-                try:
-                    worker_id = int(current_process()._identity[0])
-                except:
-                    worker_id = 0
-                results = [
-                    [*sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f"[Worker {worker_id}] ")],
-                    safe_cfg,
-                ]
+            # if "aggregation_type" in cfg and cfg["aggregation_type"] == "sync":
+            #     # Run synchronous scheduler
+            #     try:
+            #         worker_id = int(current_process()._identity[0])
+            #     except:
+            #         worker_id = 0
+
+            #     # worker_id = 1
+            #     cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
+            #     # print('Running SYNC scheduler')
+            #     results = [
+            #         [
+            #             *sched.run_sync_tasks(
+            #                 num_rounds,
+            #                 position=worker_id,
+            #                 add_descr=f"[Worker {worker_id}] ",
+            #                 client_participation=cfg["client_participartion"],
+            #             )
+            #         ],
+            #         safe_cfg,
+            #     ]
+            # else:
+            #     # Default: Run asyn scheduler
+            #     # print('Running ASYNC scheduler')
+            #     try:
+            #         worker_id = int(current_process()._identity[0])
+            #     except:
+            #         worker_id = 0
+            #     results = [
+            #         [*sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f"[Worker {worker_id}] ")],
+            #         safe_cfg,
+            #     ]
             if outfile:
                 if lock:
                     lock.acquire()
