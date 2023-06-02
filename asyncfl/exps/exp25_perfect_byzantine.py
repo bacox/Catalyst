@@ -40,21 +40,21 @@ if __name__ == '__main__':
         dataset = 'mnist'
         num_byz_nodes = [3]
         # num_byz_nodes = [0]
-        num_rounds = 20
+        num_rounds = 200
         idx = 1
         repetitions = 1
         exp_id = 0
         server_lr = 0.1
-        # server_lr = 0.5
+        server_lr = 0.5
         num_clients = 10
         attacks = [
-            [AFL.NGClient, {'magnitude': 100,'sampler': 'uniform','sampler_args': {}}],
-            # [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
+            # [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
+            [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         
         servers = [
             [AFL.SaSGDPerfectByz,{'learning_rate': server_lr}],
-            [AFL.SaSGD,{'learning_rate': server_lr}],
+            # [AFL.SaSGD,{'learning_rate': server_lr}],
             # [AFL.Server,{'learning_rate': server_lr}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
@@ -80,8 +80,8 @@ if __name__ == '__main__':
                 'aggregation_type': 'async',
                 'name': f'{server_name}-{key_name}',
                 'num_rounds': num_rounds,
-                'client_batch_size': -1,
-                'eval_interval': 1,
+                'client_batch_size': 1,
+                'eval_interval': 5,
                 'clients': {
                         'client': AFL.Client,
                         'client_args': {
@@ -147,7 +147,8 @@ if __name__ == '__main__':
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
         local_df['name'] = parts[-1]
-        local_bft_df = pd.DataFrame(out[0][2], columns=['action', 'client_id', 'lipschitz', 'round', 'is_byzantine', 'performance', 'global_score'])
+        # local_bft_df = pd.DataFrame(out[0][2], columns=['action', 'client_id', 'lipschitz', 'round', 'is_byzantine', 'performance', 'global_score'])
+        local_bft_df = pd.DataFrame(out[0][2], columns=['server_age', 'client_id', 'grad_age', 'is_byzantine', 'client_weight_vec'])
         local_bft_df['name'] = name
         bft_dfs.append(local_bft_df)
         dfs.append(local_df)
@@ -156,6 +157,13 @@ if __name__ == '__main__':
     server_df = pd.concat(dfs, ignore_index=True)
     bft_stats_df = pd.concat(bft_dfs, ignore_index=True)
 
+    bft_data = bft_stats_df.values
+    client_ids = bft_stats_df['client_id'].values
+    client_weight_vectors = bft_stats_df['client_weight_vec'].values
+    is_byz_vec= bft_stats_df['is_byzantine'].values
+
+    filename = 'mnist_byz_weights_capture.json'
+    bft_stats_df.to_json(filename)
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
     graph_file = graphs_path / f'{exp_name}.png'
     print(f'Generating plot: {graph_file}')
@@ -170,6 +178,19 @@ if __name__ == '__main__':
     if show_plots:
         plt.show()
     plt.close(fig)
+
+    print(bft_stats_df.head(1))
+    fig = plt.figure(figsize=(8, 6))
+    g = sns.scatterplot(data=bft_stats_df, x='server_age', y='client_id', style='is_byzantine')
+    plt.title('Telerig')
+    plt.xlabel('Rounds')
+    plt.ylabel('Test accuracy')
+    # g.legend_.set_title(None)
+    if show_plots:
+        plt.show()
+    plt.close(fig)
+
+
 
 
     # graph_file = graphs_path / f'{exp_name}_byz_perf.png'

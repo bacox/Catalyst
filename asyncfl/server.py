@@ -51,6 +51,15 @@ def no_defense_update(params, global_parameters, learning_rate=1):
 
     return global_parameters
 
+def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
+    vec = []
+    for key, param in net_dict.items():
+        # print(key, torch.max(param))
+        if key.split('.')[-1] == 'num_batches_tracked':
+            continue
+        vec.append(param.view(-1))
+    return torch.cat(vec)
+
 class Server:
 
     def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005) -> None:
@@ -80,6 +89,7 @@ class Server:
         self.lips = {}
         self.bft_telemetry = []
         self.model_history.append(self.get_model_weights())
+        # self.client_update_history = []
         # self.bft_telemetry = {
         #     "accepted": {
         #         i: {
@@ -120,6 +130,8 @@ class Server:
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
         update_params = get_update(weights, self.model_history[server_model_age])
+        client_weight_vec = parameters_dict_to_vector_flt(weights)
+        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
 
         # Aggregate
         # alpha = self.learning_rate / float(gradient_age)

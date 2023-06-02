@@ -1,4 +1,4 @@
-from asyncfl.server import Server, get_update, no_defense_update
+from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
 
@@ -11,9 +11,11 @@ class SaSGD(Server):
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
 
-    def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
+    def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
         update_params = get_update(weights, self.model_history[server_model_age])
+        client_weight_vec = parameters_dict_to_vector_flt(weights)
+        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
 
         # Aggregate
         alpha = self.learning_rate / float(max(gradient_age, 1))
