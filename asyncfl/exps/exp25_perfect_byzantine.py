@@ -40,7 +40,7 @@ if __name__ == '__main__':
         dataset = 'mnist'
         num_byz_nodes = [3]
         # num_byz_nodes = [0]
-        num_rounds = 50
+        num_rounds = 20
         idx = 1
         repetitions = 1
         exp_id = 0
@@ -48,8 +48,8 @@ if __name__ == '__main__':
         # server_lr = 0.5
         num_clients = 10
         attacks = [
-            # [AFL.NGClient, {'magnitude': 100,'sampler': 'uniform','sampler_args': {}}],
-            [AFL.RDCLient, {'a_atk':0.5, 'sampler': 'uniform', 'sampler_args': {}}],
+            [AFL.NGClient, {'magnitude': 100,'sampler': 'uniform','sampler_args': {}}],
+            # [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         
         servers = [
@@ -80,6 +80,8 @@ if __name__ == '__main__':
                 'aggregation_type': 'async',
                 'name': f'{server_name}-{key_name}',
                 'num_rounds': num_rounds,
+                'client_batch_size': -1,
+                'eval_interval': 1,
                 'clients': {
                         'client': AFL.Client,
                         'client_args': {

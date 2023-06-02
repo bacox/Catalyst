@@ -140,7 +140,7 @@ class Scheduler:
     
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
-    def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async'):
+    def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
         
         if fl_type != 'sync':
             # Compute the clients server interactions
@@ -169,9 +169,9 @@ class Scheduler:
 
         # Iterate rounds
         if fl_type == 'sync':
-            server_metrics, bft_telemetry = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = -1, test_frequency=5)
+            server_metrics, bft_telemetry = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = batch_limit, test_frequency=test_frequency)
         else:
-            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=5)
+            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=batch_limit, test_frequency=test_frequency)
 
 
         return server_metrics, model_age_stats, bft_telemetry
@@ -244,6 +244,10 @@ class Scheduler:
     def run_sync_tasks(
         self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0
     ):
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         """To run Synchronous Federated Learning.
 
         Args:
@@ -328,6 +332,10 @@ class Scheduler:
         return server_metrics, [], server.bft_telemetry
 
     def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         """
         To run Asynchronous Federated Learning
         @TODO: Put dict of interaction sequence as argument
@@ -453,6 +461,8 @@ class Scheduler:
                 worker_id = 0
             cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
             cfg["aggregation_type"] = cfg.get("aggregation_type", "async")
+            cfg["eval_interval"] = cfg.get("eval_interval", 25) # Default is server eval after 25 server interactions
+            cfg["client_batch_size"] = cfg.get("client_batch_size", -1) # Default is full epoch
             results = [
                 [
                     *sched.execute(
@@ -460,7 +470,9 @@ class Scheduler:
                         position=worker_id,
                         add_descr=f"[Worker {worker_id}] ",
                         client_participation=cfg["client_participartion"],
-                        fl_type=cfg["aggregation_type"]
+                        fl_type=cfg["aggregation_type"],
+                        batch_limit=cfg["client_batch_size"],
+                        test_frequency=cfg["eval_interval"]
                     )
                 ],
                 safe_cfg,
