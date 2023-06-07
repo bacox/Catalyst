@@ -12,3 +12,5 @@ graphviz
 pytest
 scikit-learn
 hdbscan
+scikit-image
+opencv-python

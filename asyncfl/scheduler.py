@@ -228,9 +228,9 @@ class Scheduler:
                 client.move_to_gpu()
                 client.train(num_batches=batch_limit)
                 is_byzantine = client.is_byzantine
-                c_id = client.pid()
+                c_id = client.get_pid()
                 client_weights.append(client.get_weights())
-                byz_clients.append(c_id, is_byzantine)
+                byz_clients.append((c_id, is_byzantine))
                 client.move_to_cpu()
             
             # Aggregate
