@@ -47,3 +47,10 @@ python3 -m venv venv
 source venv/bin/activate
 pip install .
 ```
+
+### Run
+
+To list the available experiments to run, execute:
+```bash
+python -m asyncfl.exps
+```
