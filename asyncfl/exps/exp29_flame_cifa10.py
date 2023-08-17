@@ -44,7 +44,7 @@ if __name__ == '__main__':
         # num_byz_nodes = [0, 1, 3]
         num_byz_nodes = [0]
         # num_byz_nodes = [0]
-        num_rounds = 1000
+        num_rounds = 100
         idx = 1
         repetitions = 1
         exp_id = 0

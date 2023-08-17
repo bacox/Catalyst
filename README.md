@@ -54,3 +54,15 @@ To list the available experiments to run, execute:
 ```bash
 python -m asyncfl.exps
 ```
+
+Experiments are defines in `python` files in the folder `asyncfl.exps`.
+To run an experiment run the following command:
+
+```bash
+python -m asyncfl.exps.<exp_name>.py
+```
+
+To process the results run:
+```bash
+python -m asyncfl.exps.<exp_name>.py -o
+```
