@@ -1,3 +1,4 @@
+from collections import OrderedDict
 from typing import List, Any
 
 import numpy as np
@@ -14,6 +15,8 @@ def get_model_by_name(name: str):
         return LeNet(output_dim=10)
     elif name == 'cifar10-resnet9':
         return ResNet9(3, 10)
+    elif name == 'cifar10-resnet18':
+        return resnet18(num_classes=10)
     elif name == 'cifar100-lenet':
         return LeNet(output_dim=100)
     elif name == 'cifar100-resnet':
@@ -187,13 +190,14 @@ class BasicBlock(nn.Module):
         super().__init__()
 
         #residual function
-        self.residual_function = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels * BasicBlock.expansion, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels * BasicBlock.expansion)
-        )
+
+        self.residual_function = nn.Sequential(OrderedDict([
+            ('Conv', nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv2', nn.Conv2d(out_channels, out_channels * BasicBlock.expansion, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels * BasicBlock.expansion))
+        ]))
 
         #shortcut
         self.shortcut = nn.Sequential()
@@ -201,10 +205,10 @@ class BasicBlock(nn.Module):
         #the shortcut output dimension is not the same with residual function
         #use 1*1 convolution to match the dimension
         if stride != 1 or in_channels != BasicBlock.expansion * out_channels:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels * BasicBlock.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels * BasicBlock.expansion)
-            )
+            self.shortcut = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels, out_channels * BasicBlock.expansion, kernel_size=1, stride=stride, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels * BasicBlock.expansion))
+            ]))
 
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
@@ -215,24 +219,24 @@ class BottleNeck(nn.Module):
     expansion = 4
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
-        self.residual_function = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels * BottleNeck.expansion, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels * BottleNeck.expansion),
-        )
+        self.residual_function = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv2', nn.Conv2d(out_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv3', nn.Conv2d(out_channels, out_channels * BottleNeck.expansion, kernel_size=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels * BottleNeck.expansion)),
+        ]))
 
         self.shortcut = nn.Sequential()
 
         if stride != 1 or in_channels != out_channels * BottleNeck.expansion:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels * BottleNeck.expansion, stride=stride, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels * BottleNeck.expansion)
-            )
+            self.shortcut = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels, out_channels * BottleNeck.expansion, stride=stride, kernel_size=1, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels * BottleNeck.expansion))
+            ]))
 
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
@@ -245,10 +249,11 @@ class Cifar100ResNet(nn.Module):
         self.in_channels = 64
         self.criterion = torch.nn.CrossEntropyLoss()
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True))
+        self.conv1 = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(64)),
+            ('relua', nn.ReLU(inplace=True))
+            ]))
         #we use a different inputsize than the original paper
         #so conv2_x's stride is 1
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)
@@ -293,10 +298,10 @@ class Cifar100ResNet(nn.Module):
 
         return output
 
-def resnet18():
+def resnet18(num_classes=100):
     """ return a ResNet 18 object
     """
-    return Cifar100ResNet(BasicBlock, [2, 2, 2, 2])
+    return Cifar100ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
 def resnet34():
     """ return a ResNet 34 object

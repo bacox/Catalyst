@@ -14,7 +14,7 @@ class NGClient(Client):
         logging.info(f'[Client {self.pid}] Running NG_Client training loop, magnitude={self.magnitude}')
         super().train(num_batches)
         weight_vector = flatten(self.network)
-        inversed_weights = weight_vector * (self.g_flat.cpu().numpy() * -1.0 * self.magnitude)
+        inversed_weights = weight_vector * (self.g_flat * -1.0 * self.magnitude)
         unflatten(self.network, inversed_weights)
 
 

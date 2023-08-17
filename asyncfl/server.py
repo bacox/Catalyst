@@ -5,32 +5,47 @@ import copy
 from .dataloader import afl_dataloader, afl_dataset
 from .client import Client
 from .network import get_model_by_name, model_gradients, flatten, unflatten_g
+import logging
 
 def fed_avg(parameters, sizes = []):
     if not sizes:
         sizes = [1] * len(parameters)
     new_params = {}
-    sum_size = 0
+    sum_size = 0.0
     for client in parameters:
         for name in parameters[client].keys():
-            try:
-                new_params[name].data += (parameters[client][name].data * sizes[client])
-            except:
-                new_params[name] = (parameters[client][name].data * sizes[client])
+            # try:
+            #     new_params[name].data += (parameters[client][name].data * sizes[client])
+            # except:
+            new_params[name] = (parameters[client][name].detach().clone() * sizes[client])
         sum_size += sizes[client]
 
     for name in new_params:
         # @TODO: Is .long() really required?
-        new_params[name].data = new_params[name].data.long() / sum_size
+        # logging.info(f'Devide by size of {sum_size} for {new_params[name]}')
+        # logging.info(f'Result is: {new_params[name]/ sum_size}')
+        new_params[name] = new_params[name] / sum_size
     return new_params
+
+
+
 
 def get_update(update, model):
     '''get the update weight'''
     update2 = {}
-    for key, var in update.items():
-        update2[key] = update[key] - model[key]
+    # keys = [x for x in update.keys() if 'bn.' not in x]
+    keys = [x for x in update.keys()]
+    for key in keys:
+        # logging.info(f'Get update key {key}')
+        update2[key] = update[key].detach().clone() - model[key].detach().clone()
     return update2
 
+def get_update_no_bn(update, model, alpha=0.5):
+    '''
+    Get the update without the info for the batch normalization parameters
+
+    '''
+    pass
 
 def no_defense_update(params, global_parameters, learning_rate=1):
     total_num = len(params)
@@ -39,11 +54,13 @@ def no_defense_update(params, global_parameters, learning_rate=1):
         if sum_parameters is None:
             sum_parameters = {}
             for key, var in params[i].items():
+                # logging.info(f'Key: {key}')
                 sum_parameters[key] = var.clone()
         else:
             for var in sum_parameters:
+                # logging.info(f'Key: {key}')
                 sum_parameters[var] = sum_parameters[var] + params[i][var]
-    for var in global_parameters:
+    for var in sum_parameters:
         if var.split('.')[-1] == 'num_batches_tracked':
             global_parameters[var] = params[0][var]
             continue
@@ -106,6 +123,12 @@ class Server:
         # }
 
     def set_weights(self, weights):
+
+        keys = weights.keys()
+        old_weights = self.network.state_dict()
+        for key in keys:
+            logging.info(f'[{key}] equal ? {torch.eq(weights[key], old_weights[key])}')
+        # logging.info(f'Setting server weights: {weights}')
         self.network.load_state_dict(copy.deepcopy(weights))
 
     def get_model_weights(self):
@@ -131,7 +154,8 @@ class Server:
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
         update_params = get_update(weights, self.model_history[server_model_age])
         client_weight_vec = parameters_dict_to_vector_flt(weights)
-        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine])
 
         # Aggregate
         # alpha = self.learning_rate / float(gradient_age)
@@ -196,6 +220,7 @@ class Server:
                 _, predicted = torch.max(outputs.data, 1)
                 total += target.size(0)
                 correct += (predicted == target).sum().item()
+                logging.info(f'Eval --> correct: {correct}, total: {total}')
         return 100. * correct / total, loss.item()
 
     # def create_clients(self, n, config=None):

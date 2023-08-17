@@ -7,6 +7,7 @@ import logging
 from asyncfl.util import compute_convergance, compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
 from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
+from torch.utils.data import DataLoader
 
 def polyak_update(polyak_factor, target_network, network):
     for target_param, param in zip(target_network.parameters(), network.parameters()):
@@ -106,7 +107,7 @@ class Client:
     #     # print('Finished training')
 
 
-    def train(self, num_batches = -1):
+    def train(self, num_batches = -1, local_epochs = 1):
         # @TODO: Increment local_age
         self.w_flat = flatten(self.network)
 
@@ -120,20 +121,23 @@ class Client:
         g_flat_local = torch.zeros_like(self.w_flat)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.optimizer.zero_grad()
-        for batch_idx, (inputs, labels) in enumerate(self.train_set):
-            # print(f'[Client{self.pid}]:: {batch_idx}')
-            inputs, labels = inputs.to(self.device), labels.to(self.device)
-            self.optimizer.zero_grad()
-            outputs = self.network(inputs)
-            loss = self.loss_function(outputs, labels)
-            loss.backward()
-            flatten_g(self.network, g_flat_local)
-            # g_flat_local.g_flat.mul_(self.lr)
-            self.g_flat.add_(g_flat_local)
-            # print(self.g_flat)
-            self.optimizer.step()
-            if batch_idx == num_batches:
-                break
+        for ep in range(local_epochs):
+            for batch_idx, (inputs, labels) in enumerate(self.train_set):
+                # print(f'[Client{self.pid}]:: {batch_idx}')
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                self.optimizer.zero_grad()
+                outputs = self.network(inputs)
+                loss = self.loss_function(outputs, labels)
+                loss.backward()
+                flatten_g(self.network, g_flat_local)
+                # g_flat_local.g_flat.mul_(self.lr)
+                self.g_flat.add_(g_flat_local)
+                # print(self.g_flat)
+                self.optimizer.step()
+                # logging.info(f'[{self.pid}] loss: {loss}')
+                if batch_idx == num_batches:
+                    break
+
             # print(self.g_flat)
         current_weights = flatten(self.network)
 

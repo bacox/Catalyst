@@ -18,7 +18,8 @@ class SaSGDPerfectByz(Server):
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
         update_params = get_update(weights, self.model_history[server_model_age])
         client_weight_vec = parameters_dict_to_vector_flt(weights)
-        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine])
 
         # Aggregate
         if not is_byzantine:

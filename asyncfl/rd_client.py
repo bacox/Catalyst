@@ -15,8 +15,9 @@ class RDCLient(Client):
         logging.info(f'[Client {self.pid}] Running RD_Client training loop, a_atk={self.a_atk}')
         super().train(num_batches)
         weight_vector = flatten(self.network)
-        g = self.g_flat.cpu()
-        inversed_weights = weight_vector * (torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy())
+        g = self.g_flat
+        inter = torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2)))
+        inversed_weights = weight_vector * inter
         unflatten(self.network, inversed_weights)
 
     def get_gradients(self):

@@ -1,7 +1,7 @@
 from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
-
+import logging
 
 class SaSGD(Server):
     """
@@ -12,14 +12,39 @@ class SaSGD(Server):
         self.mitigate_staleness = mitigate_staleness
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
+        """
+        SA-sgd update the weights with staleness?
+
+        SGD messes with the batch normalization in DNNs
+
+        One solution might be to split the batch normalization from the sgd part
+
+        A second option might be 
+        """
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
-        update_params = get_update(weights, self.model_history[server_model_age])
-        client_weight_vec = parameters_dict_to_vector_flt(weights)
-        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+
+        approx_gradient = get_update(weights, self.model_history[gradient_age])
+
+
+
+        # logging.info(f'Agg: s_age:{self.age}, c_age: {gradient_age}, u _age: {self.age - gradient_age}')
+        gradient_age = self.age - gradient_age
+        # update_params = get_update(weights, self.model_history[server_model_age])
+        # client_weight_vec = parameters_dict_to_vector_flt(weights)
+        # # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine])
 
         # Aggregate
         alpha = self.learning_rate / float(max(gradient_age, 1))
-        self.set_weights(no_defense_update([update_params], self.get_model_weights(), alpha))
+        # alpha = self.learning_rate
+
+        # self.set_weights(no_defense_update([weights], self.get_model_weights(), alpha))
+        # self.set_weights(weights)
+        logging.info(f'Agg with alpha: {alpha}')
+
+        # Add approximate gradient to the current weights
+        # logging.info(f'Approx gradient: {approx_gradient}')
+        self.set_weights(no_defense_update([approx_gradient], self.get_model_weights(), alpha))
         self.model_history.append(self.get_model_weights())
         self.incr_age()
         return self.get_model_weights()

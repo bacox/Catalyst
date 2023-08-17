@@ -9,11 +9,12 @@ class FlameServer(Server):
     """
     Implementation of Flame Defense
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True) -> None:
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True, hist_size = 3) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
         self.model_history_dict = {}
         self.model_full_history = []
+        self.hist_size = hist_size
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
@@ -24,14 +25,18 @@ class FlameServer(Server):
         # Save model weights to dict
         self.model_history_dict[client_id] = (weights, update_params)
         self.model_full_history.append([weights, update_params])
-        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+        self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine])
 
-        if len(self.model_full_history) >= self.f * 2 + 1:
+        if len(self.model_full_history) >= max(self.f * 2 + 1, 2):
             # local_models = [item[0] for key, item in self.model_history_dict.items() if key != client_id] + [weights]
             # update_params_list = [item[1] for key, item in self.model_history_dict.items() if key != client_id] + [update_params]
-            local_models = [item[0] for item in self.model_full_history]
-            update_params_list = [item[1] for item in self.model_full_history]
-            args_dict = {'num_users': 10, 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
+            # history_size = len(self.model_full_history)
+            # history_size = self.f * 2 + 1
+
+            local_models = [item[0] for item in self.model_full_history[-self.hist_size:]]
+            update_params_list = [item[1] for item in self.model_full_history[-self.hist_size:]]
+            args_dict = {'num_users': self.n, 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
             alpha = self.learning_rate / float(max(gradient_age, 1))
             global_model, accepted = flame(local_models, update_params_list, self.get_model_weights(), args_dict, alpha)
             self.set_weights(global_model)

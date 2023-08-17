@@ -31,7 +31,7 @@ def afl_dataset2(
     return data_set
 
 
-def afl_dataloader(dataset, train_batch_size=400,
+def afl_dataloader(dataset, train_batch_size=50,
     test_batch_size=400,
     client_id=0,
     n_clients=1,
@@ -40,7 +40,7 @@ def afl_dataloader(dataset, train_batch_size=400,
     use_iter=True,
     sampler="uniform",
     sampler_args={}
-    ):
+    ) -> DataLoader:
     
     indices = uniform_sampler_func(dataset, n_clients, client_id, seed, **sampler_args)
     

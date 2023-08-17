@@ -143,6 +143,7 @@ class Scheduler:
     def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
         
         if fl_type != 'sync':
+            logging.info('Running async')
             # Compute the clients server interactions
             if not ct_clients:
                 ct_clients = [1] * len(self.get_clients())
@@ -178,6 +179,7 @@ class Scheduler:
 
     def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=25):
         # Play all the server interactions
+        logging.info('Running async loop')
         server_metrics = []
         model_age_stats = []
         for update_id, client_id in enumerate(
@@ -192,9 +194,12 @@ class Scheduler:
             client: Client = clients[client_id]
             client.move_to_gpu()
             client.train(num_batches=batch_limit)
+            
             is_byzantine = client.is_byzantine
             client_age = client.local_age
             agg_weights = server.client_weight_update(client_id, client.get_weights(),client_age, is_byzantine)
+            # logging.info(agg_weights.keys())
+            # logging.info(agg_weights)
             client.set_weights(agg_weights, server.get_age())
             client.move_to_cpu()
             model_age_stats.append([update_id, client.pid, client_age])
@@ -478,38 +483,6 @@ class Scheduler:
                 safe_cfg,
             ]
 
-            # if "aggregation_type" in cfg and cfg["aggregation_type"] == "sync":
-            #     # Run synchronous scheduler
-            #     try:
-            #         worker_id = int(current_process()._identity[0])
-            #     except:
-            #         worker_id = 0
-
-            #     # worker_id = 1
-            #     cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
-            #     # print('Running SYNC scheduler')
-            #     results = [
-            #         [
-            #             *sched.run_sync_tasks(
-            #                 num_rounds,
-            #                 position=worker_id,
-            #                 add_descr=f"[Worker {worker_id}] ",
-            #                 client_participation=cfg["client_participartion"],
-            #             )
-            #         ],
-            #         safe_cfg,
-            #     ]
-            # else:
-            #     # Default: Run asyn scheduler
-            #     # print('Running ASYNC scheduler')
-            #     try:
-            #         worker_id = int(current_process()._identity[0])
-            #     except:
-            #         worker_id = 0
-            #     results = [
-            #         [*sched.run_no_tasks(num_rounds, position=worker_id, add_descr=f"[Worker {worker_id}] ")],
-            #         safe_cfg,
-            #     ]
             if outfile:
                 if lock:
                     lock.acquire()
@@ -528,6 +501,8 @@ class Scheduler:
         except Exception as ex:
             print("Got an exception while running!!")
             print(traceback.format_exc())
+            logging.error("Got an exception while running")
+            logging.error(traceback.format_exc())
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False):

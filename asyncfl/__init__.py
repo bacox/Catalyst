@@ -9,3 +9,5 @@ from .telerig import Telerig
 from .sa_sgd import SaSGD
 from .sa_sgd_perfect_byz import SaSGDPerfectByz
 from .flame_server import FlameServer
+from .fedAsync_server import FedAsync
+from .fedwait_server import FedWait
