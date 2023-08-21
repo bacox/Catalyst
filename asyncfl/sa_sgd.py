@@ -1,4 +1,4 @@
-from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
+from asyncfl.server import Server, get_update, no_defense_update, no_defense_vec_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
 import logging
@@ -10,6 +10,32 @@ class SaSGD(Server):
     def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
+
+
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        logging.info(f'SaSGD dict_vector update of client {client_id}')
+        gradient_age = self.age - gradient_age
+        server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+
+        approx_grad = weight_vec - self.model_history[server_model_age] # Gradient approximation
+
+        alpha = self.learning_rate / float(max(gradient_age, 1))
+        logging.info(f'SaSGD agregation with alpha: {alpha}')
+
+        updated_model_vec = no_defense_vec_update([approx_grad], self.get_model_dict_vector(), server_rl=alpha)
+        self.model_history.append(updated_model_vec)
+        self.load_model_dict_vector(updated_model_vec)
+        self.incr_age()
+        return updated_model_vec.copy()
+
+
+        self.set_weights(no_defense_update([approx_gradient], self.get_model_weights(), alpha))
+        self.model_history.append(self.get_model_weights())
+        self.incr_age()
+        return self.get_model_weights()
+
+
+        return super().client_weight_dict_vec_update(client_id, weight_vec, gradient_age, is_byzantine)
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         """

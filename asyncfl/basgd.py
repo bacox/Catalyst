@@ -157,6 +157,7 @@ class BASGD(Server):
         self.q = q
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        logging.info(f'BaSGD dict_vector update of client {client_id}')
         vec_t = torch.from_numpy(weight_vec).to(self.device)
         self.buffers.receive(vec_t, client_id)
         if self.buffers.nonEmpty():

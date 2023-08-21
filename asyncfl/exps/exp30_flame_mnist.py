@@ -44,12 +44,12 @@ if __name__ == '__main__':
         # num_byz_nodes = [0, 1, 3]
         num_byz_nodes = [0]
         # num_byz_nodes = [0]
-        num_rounds = 100
+        num_rounds = 500
         idx = 1
         repetitions = 1
         exp_id = 0
         # server_lr = 0.1
-        server_lr = 0.1
+        server_lr = 0.2
         num_clients = 200
 
         attacks = [
@@ -61,13 +61,14 @@ if __name__ == '__main__':
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
-            # [AFL.SaSGD,{'learning_rate': server_lr}],
+            [AFL.SaSGD,{'learning_rate': server_lr}],
             # [AFL.FedAsync,{'learning_rate': server_lr}],
             # [AFL.FedWait,{'learning_rate': server_lr}],
             [AFL.Server,{'learning_rate': server_lr}],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
+
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
