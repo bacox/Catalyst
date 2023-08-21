@@ -66,3 +66,9 @@ To process the results run:
 ```bash
 python -m asyncfl.exps.<exp_name>.py -o
 ```
+
+To follow the logging output do:
+
+```bash
+tail -f debug.log
+```

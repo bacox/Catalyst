@@ -40,7 +40,7 @@ class FlameServer(Server):
             alpha = self.learning_rate / float(max(gradient_age, 1))
             global_model, accepted = flame(local_models, update_params_list, self.get_model_weights(), args_dict, alpha)
             self.set_weights(global_model)
-            logging.info(f'[{is_byzantine},{accepted == is_byzantine:5}]Server accepts update? {accepted}, is byzantine ? {is_byzantine}')
+            # logging.info(f'[{is_byzantine},{accepted == is_byzantine:5}]Server accepts update? {accepted}, is byzantine ? {is_byzantine}')
 
 
             # Aggregate

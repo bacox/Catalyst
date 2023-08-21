@@ -126,8 +126,8 @@ class Server:
 
         keys = weights.keys()
         old_weights = self.network.state_dict()
-        for key in keys:
-            logging.info(f'[{key}] equal ? {torch.eq(weights[key], old_weights[key])}')
+        # for key in keys:
+        #     logging.info(f'[{key}] equal ? {torch.eq(weights[key], old_weights[key])}')
         # logging.info(f'Setting server weights: {weights}')
         self.network.load_state_dict(copy.deepcopy(weights))
 
@@ -151,6 +151,7 @@ class Server:
         self.age += 1
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
+        logging.info('Default server client weight update')
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
         update_params = get_update(weights, self.model_history[server_model_age])
         client_weight_vec = parameters_dict_to_vector_flt(weights)
@@ -167,6 +168,7 @@ class Server:
         
 
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
+        logging.info('Default server client update')
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         self.aggregate(client_gradients)
