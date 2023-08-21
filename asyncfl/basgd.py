@@ -1,12 +1,14 @@
 
 
 import copy
+import inspect
 from typing import List
 import numpy as np
 import torch
 from asyncfl import Server
 from asyncfl.network import flatten, unflatten_g
 import sys
+import logging
 
 class Buffer:
 
@@ -92,7 +94,7 @@ class BufferSet:
 
 
     def nonEmpty(self):
-        # Check if all the buffers have at least 1 gradient
+        # Check if all the buffers have at least 2 gradients
         for idx,b in enumerate(self.buffers):
             if not len(b):
                 # print(f'buffer {idx} is empty\n')
@@ -154,7 +156,38 @@ class BASGD(Server):
         self.aggr_mode = aggr_mode
         self.q = q
 
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        vec_t = torch.from_numpy(weight_vec).to(self.device)
+        self.buffers.receive(vec_t, client_id)
+        if self.buffers.nonEmpty():
+            logging.info(f'Aggregate! {len(self.buffers)} buffers')
+            self.optimizer.zero_grad()
+            buffer_gradients = self.buffers.get_all_gradients()
+            if self.aggr_mode == 'median':
+                print('agg Median')
+                avg_weight_vec = median_aggregation(buffer_gradients)
+            elif self.aggr_mode == 'trmean':
+                avg_weight_vec = trmean_aggregation(buffer_gradients, self.q)
+            elif self.aggr_mode == 'krum':
+                avg_weight_vec = krum_aggregation(buffer_gradients, self.q)
+            else:
+                # print('Agg mean')
+                avg_weight_vec = torch.mean(torch.stack(buffer_gradients), dim=0)
+            # print(f'Aggregate!!!! --> {avg_weight_vec}')
+            # self.aggregate(avg_weight_vec)
+            self.model_history.append(avg_weight_vec)
+            self.load_model_dict_vector_t(avg_weight_vec)
+            self.incr_age()
+        # logging.info(updated_model_vec)
+        return self.get_model_dict_vector()
+
+
+    def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
+        raise NotImplementedError(f"Function '{inspect.currentframe().f_code.co_name}' is not implemented yet in {__class__.__name__}")
+        return super().client_weight_update(client_id, weights, gradient_age, is_byzantine)
+
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         grads = torch.from_numpy(gradients)
         # print(f'Got gradient from client {client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
         # print('Hang here?')

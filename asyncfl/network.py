@@ -48,6 +48,21 @@ def flatten(model):
         vec.append(param.data.view(-1))
     return torch.cat(vec)
 
+def flatten_dict(model: torch.nn.Module) -> torch.Tensor:
+    vec = []
+    for param in model.state_dict().copy().values():
+        vec.append(param.data.view(-1))
+    return torch.cat(vec)
+
+def unflatten_dict(model: torch.nn.Module, vec: torch.Tensor):
+    pointer = 0
+    state_dict = {}
+    for key, param in model.state_dict().items():
+        num_param = torch.prod(torch.LongTensor(list(param.size())))
+        param.data = vec[pointer:pointer + num_param].view(param.size())
+        pointer += num_param
+        state_dict[key] = param
+    model.load_state_dict(state_dict)
 
 def unflatten(model, vec):
     pointer = 0

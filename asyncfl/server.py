@@ -1,10 +1,10 @@
-from typing import Any
+from typing import Any, List
 import numpy as np
 import torch
 import copy
 from .dataloader import afl_dataloader, afl_dataset
 from .client import Client
-from .network import get_model_by_name, model_gradients, flatten, unflatten_g
+from .network import flatten_dict, get_model_by_name, model_gradients, flatten, unflatten_dict, unflatten_g
 import logging
 
 def fed_avg(parameters, sizes = []):
@@ -46,6 +46,12 @@ def get_update_no_bn(update, model, alpha=0.5):
 
     '''
     pass
+
+def no_defense_vec_update(params: List[np.ndarray], global_params: np.ndarray, server_rl = 1) -> np.ndarray:
+    summed: np.ndarray = np.sum(params, axis=0)
+    # logging.info(f'Shape of summed = {summed.shape}')
+    # logging.info(f'Shape of global params = {global_params.shape}')
+    return global_params + server_rl * (summed / float(len(params)))
 
 def no_defense_update(params, global_parameters, learning_rate=1):
     total_num = len(params)
@@ -105,7 +111,14 @@ class Server:
         self.age = 0
         self.lips = {}
         self.bft_telemetry = []
-        self.model_history.append(self.get_model_weights())
+
+        # Updated way
+        self.model_history.append(self.get_model_dict_vector())
+
+        # Old way
+        # self.model_history.append(self.get_model_weights())
+        
+        
         # self.client_update_history = []
         # self.bft_telemetry = {
         #     "accepted": {
@@ -133,6 +146,16 @@ class Server:
 
     def get_model_weights(self):
         return self.network.state_dict()
+    
+    def get_model_dict_vector(self) -> np.ndarray:
+        return flatten_dict(self.network).cpu().numpy().copy()
+    
+    def load_model_dict_vector_t(self, vec: torch.Tensor):
+        unflatten_dict(self.network, vec)
+
+    def load_model_dict_vector(self, vec: np.ndarray):
+        vec = torch.from_numpy(vec).to(self.device)
+        unflatten_dict(self.network, vec)
 
     def get_model_gradients(self):
         model_gradients(self.network)
@@ -149,6 +172,22 @@ class Server:
 
     def incr_age(self):
         self.age += 1
+
+    
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        logging.info(f'Default server dict_vector update of client {client_id}')
+        server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+
+        model_difference = weight_vec - self.model_history[server_model_age] # Gradient approximation
+        updated_model_vec = no_defense_vec_update([model_difference], self.get_model_dict_vector(), server_rl=self.learning_rate)
+        self.model_history.append(updated_model_vec)
+        self.load_model_dict_vector(updated_model_vec)
+        self.incr_age()
+        # logging.info(updated_model_vec)
+        return updated_model_vec.copy()
+
+
+
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):
         logging.info('Default server client weight update')
@@ -168,6 +207,7 @@ class Server:
         
 
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         logging.info('Default server client update')
         client_gradients = torch.from_numpy(gradients)
         # print(f'Got gradient from client {_client_id}: grad_age={gradient_age}, server_age={self.get_age()}, diff={self.get_age() - gradient_age}')
@@ -202,6 +242,7 @@ class Server:
         """Merges the new gradients and assigns them to their relevant parameter
         Uses the optimizer update the model based on the gradients
         """
+        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
         self.prev_weights = flatten(self.network)
         unflatten_g(self.network, client_gradients, self.device)
         self.optimizer.step()
@@ -222,7 +263,7 @@ class Server:
                 _, predicted = torch.max(outputs.data, 1)
                 total += target.size(0)
                 correct += (predicted == target).sum().item()
-                logging.info(f'Eval --> correct: {correct}, total: {total}')
+        logging.info(f'Eval --> correct: {correct}, total: {total}')
         return 100. * correct / total, loss.item()
 
     # def create_clients(self, n, config=None):

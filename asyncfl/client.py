@@ -6,7 +6,7 @@ import numpy as np
 import logging
 from asyncfl.util import compute_convergance, compute_lipschitz_simple
 from .dataloader import afl_dataloader, afl_dataset
-from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
+from .network import MNIST_CNN, flatten_b, flatten_dict, get_model_by_name, model_gradients, flatten, flatten_g, unflatten, unflatten_dict
 from torch.utils.data import DataLoader
 
 def polyak_update(polyak_factor, target_network, network):
@@ -67,6 +67,15 @@ class Client:
     def set_weight_vectors(self, weights: np.ndarray, age):
         self.local_age = age
         unflatten(self.network, torch.from_numpy(weights).to(self.device))
+
+    
+    def get_model_dict_vector(self) -> np.ndarray:
+        return flatten_dict(self.network).cpu().numpy()
+    
+    def load_model_dict_vector(self, vec: np.ndarray):
+        vec = torch.from_numpy(vec).to(self.device)
+        unflatten_dict(self.network, vec)
+
     
 
     # GPU AUX FUNCTIONS

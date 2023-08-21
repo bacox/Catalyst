@@ -21,11 +21,11 @@ if __name__ == '__main__':
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 29: Flame baselines test cifar10')
+    print('Exp 30: Flame baselines test mnist')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp29_flame_cifar'
+    exp_name = 'exp30_flame_mnist'
     data_file = data_path / f'{exp_name}.json'
 
     # args.o = True
@@ -36,11 +36,11 @@ if __name__ == '__main__':
         pool_size = 1
         configs = []
         # model_name = 'cifar10-resnet9'
-        model_name = 'cifar10-resnet18'
+        # model_name = 'cifar10-resnet18'
         # model_name = 'cifar10-lenet'
-        dataset = 'cifar10'
-        # model_name = 'mnist-cnn'
-        # dataset = 'mnist'
+        # dataset = 'cifar10'
+        model_name = 'mnist-cnn'
+        dataset = 'mnist'
         # num_byz_nodes = [0, 1, 3]
         num_byz_nodes = [0]
         # num_byz_nodes = [0]
@@ -50,7 +50,7 @@ if __name__ == '__main__':
         exp_id = 0
         # server_lr = 0.1
         server_lr = 0.1
-        num_clients = 2
+        num_clients = 200
 
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
@@ -61,7 +61,7 @@ if __name__ == '__main__':
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 1}],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
             # [AFL.SaSGD,{'learning_rate': server_lr}],
