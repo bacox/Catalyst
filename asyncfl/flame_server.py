@@ -1,5 +1,5 @@
 import logging
-from asyncfl.flame import flame
+from asyncfl.flame import flame, flame_v2
 from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
@@ -15,6 +15,35 @@ class FlameServer(Server):
         self.model_history_dict = {}
         self.model_full_history = []
         self.hist_size = hist_size
+
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        logging.info(f'Flame dict_vector update of client {client_id}')
+        # logging.info(f'[Flame Server] weight vector: {weight_vec}')
+
+        if np.isnan(weight_vec).any():
+            logging.warning('Client has submitted a vector containing NaN values. Skipping because will crash hdbscan! Returning current server model')
+        else:
+            server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+            approx_grad = weight_vec - self.model_history[server_model_age] # Gradient approximation
+
+            # @TODO: Adapt the flame algorithm for vectors
+            self.model_history_dict[client_id] = (weight_vec, approx_grad)
+            self.model_full_history.append([weight_vec, approx_grad])
+            # self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine, client_weight_vec.cpu().numpy().tolist()])
+            self.bft_telemetry.append([self.age, client_id, gradient_age, is_byzantine])
+            if len(self.model_full_history) >= max(self.f * 2 + 1, 2):
+                local_models = [item[0] for item in self.model_full_history[-self.hist_size:]]
+                update_params_list = [item[1] for item in self.model_full_history[-self.hist_size:]]
+                args_dict = {'num_users': self.n, 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
+                alpha = self.learning_rate / float(max(gradient_age, 1))
+                # global_model, accepted = flame(local_models, update_params_list, self.get_model_dict_vector(), args_dict, alpha)
+                global_model, accepted = flame_v2(local_models, self.get_model_dict_vector(), args_dict, alpha)
+                # print(global_model.shape)
+                self.load_model_dict_vector(global_model)
+                self.model_history.append(self.get_model_dict_vector())
+                self.incr_age()
+
+        return super().client_weight_dict_vec_update(client_id, weight_vec, gradient_age, is_byzantine)
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0

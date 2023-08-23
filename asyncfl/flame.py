@@ -1,10 +1,11 @@
 import logging
+from typing import List
 import numpy as np
 import torch
 import copy
 import time
 import hdbscan
-from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
+from asyncfl.server import Server, get_update, no_defense_update, no_defense_vec_update, parameters_dict_to_vector_flt
 
 def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
     vec = []
@@ -104,6 +105,109 @@ def parameters_dict_to_vector(net_dict) -> torch.Tensor:
 #     sm_of_signs[sm_of_signs < args.robustLR_threshold] = -args.server_lr
 #     sm_of_signs[sm_of_signs >= args.robustLR_threshold] = args.server_lr 
 #     return sm_of_signs.to(args.gpu)
+
+def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
+    '''
+    What are the local models?
+    - The type should be an np.ndarray
+
+
+    What are the update_params?
+    - Is this a copy of the local_model but then the model difference?
+    What is the global model?
+    - Dict of the global model, speaks for itself?
+    What are the args?
+        args['frac'] -> selected clients?
+        args['num_users'] -> N
+        args['malicious'] -> F
+
+    What is ahlpa?
+    - this not related to flame. This is for the default async aggregation.
+
+
+    Overall structure
+
+
+    '''
+    local_models = [torch.from_numpy(x).cuda() for x in local_models]
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos_list=[]
+    for i in range(len(local_models)):
+        cos_i = []
+        for j in range(len(local_models)):
+            cos_ij = 1- cos(local_models[i],local_models[j])
+            # cos_i.append(round(cos_ij.item(),4))
+            cos_i.append(cos_ij.item())
+        cos_list.append(cos_i)
+
+    num_clients = max(int(args['frac'] * args['num_users']), 1)
+    num_malicious_clients = int(args['malicious'] * num_clients)
+    # logging.info(f'[hdbscan] {cos_list}')
+    # for cl in cos_list:
+    #     logging.info(f'[hdbscan] {cl}')
+    # for lm in local_models:
+    #     logging.info(f'[hdbscan] lm: {lm}')
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=num_clients//2 + 1,min_samples=1,allow_single_cluster=True).fit(cos_list)
+
+
+
+
+
+    benign_client = []
+    norm_list = np.array([])
+
+    max_num_in_cluster=0
+    max_cluster_index=0
+    last_is_in_majority = False
+    if clusterer.labels_.max() == clusterer.labels_[-1] and clusterer.labels_[-1] > -1:
+        last_is_in_majority = True
+    if clusterer.labels_.max() < 0:
+        for i in range(len(local_models)):
+            benign_client.append(i)
+            norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())
+    else:
+        for index_cluster in range(clusterer.labels_.max()+1):
+            if len(clusterer.labels_[clusterer.labels_==index_cluster]) > max_num_in_cluster:
+                max_cluster_index = index_cluster
+                max_num_in_cluster = len(clusterer.labels_[clusterer.labels_==index_cluster])
+        for i in range(len(clusterer.labels_)):
+            if clusterer.labels_[i] == max_cluster_index:
+                benign_client.append(i)
+    for i in range(len(local_models)):
+        # norm_list = np.append(norm_list,torch.norm(update_params_vector[i],p=2))  # consider BN
+        norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())  # no consider BN
+    # print(benign_client)
+    
+    clip_value = np.median(norm_list)
+
+    if last_is_in_majority:
+    # for i in range(len(benign_client)):
+        # i = len(clusterer.labels_)
+        i = -1
+        gamma = clip_value/norm_list[i]
+        if gamma < 1:
+            # print(gamma)
+            # print(local_models)
+            # local_models *= gamma
+            # for key in local_models[benign_client[i]]:
+            # #     local_models
+            # # #     if key.split('.')[-1] == 'num_batches_tracked':
+            # # #         continue
+            #     # lcl = local_models[benign_client[i]][key]
+            #     print(local_models[benign_client[i]])
+            #     print('<stop>')
+            local_models[benign_client[i]] *= gamma
+    global_model = no_defense_vec_update([local_models[i].cpu().numpy() for i in benign_client], global_model, alpha)
+    # Ignore noise for now
+    # #add noise
+    # for key, var in global_model.items():
+    #     if key.split('.')[-1] == 'num_batches_tracked':
+    #                 continue
+    #     temp = copy.deepcopy(var)
+    #     temp = temp.normal_(mean=0,std=args.noise*clip_value)
+    #     var += temp
+    return global_model, last_is_in_majority
+
 
 def flame(local_models, update_params, global_model, args, alpha=0.1):
     """_summary_
