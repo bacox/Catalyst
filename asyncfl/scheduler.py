@@ -24,6 +24,16 @@ def dict_convert_class_to_strings(dictionary: dict):
     d["clients"]["client"] = d["clients"]["client"].__name__
     d["clients"]["f_type"] = d["clients"]["f_type"].__name__
     d["server"] = d["server"].__name__
+    # Make sure any numpy arrays are converted to lists
+    def dict_walk(data):
+        for k, v in data.items():
+            if isinstance(v, dict):
+                data[k] = dict_walk(v)
+            elif isinstance(v, np.ndarray):
+                data[k] = v.tolist()
+                # print l
+        return data
+    d = dict_walk(d)
     return d
 
 class PoolManager:
@@ -152,6 +162,9 @@ class Scheduler:
             interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
                 :num_rounds
             ]
+        
+        print(interaction_sequence)
+        print(self.compute_times)
         
         # Create entities
         clients: List[Client] = self.get_clients()

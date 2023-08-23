@@ -1,4 +1,5 @@
 import argparse
+import copy
 from pathlib import Path
 import numpy as np
 import json
@@ -44,7 +45,7 @@ if __name__ == '__main__':
         # num_byz_nodes = [0, 1, 3]
         num_byz_nodes = [0]
         # num_byz_nodes = [0]
-        num_rounds = 400
+        num_rounds = 10
         idx = 1
         repetitions = 1
         exp_id = 0
@@ -81,7 +82,29 @@ if __name__ == '__main__':
         ]
         f0_keys = []
 
+        # ct_clients = np.abs(np.random.normal(50, 20.0, num_clients - num_byz_nodes[0]))
+        # f_clients = np.abs(np.random.normal(50, 20.0, num_byz_nodes[0]))
+        # ct_clients = [1] * (num_clients - f)
+        # print(ct_clients)
+
+        # exit(1)
+        generated_ct = {}
+
+        # @TODO: Make sure they have exactly the same schedule!!
+
         for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
+            ct_key = f'{num_clients}-{f}'
+            # print(ct_key, ct_key in generated_ct.keys())
+            # if ct_key not in generated_ct.keys():
+            #     ct_clients = np.abs(np.random.normal(50, 20.0, num_clients - f))
+            #     f_ct = np.abs(np.random.normal(50, 20.0, f))
+            #     print('Regenerate')
+            #     generated_ct[ct_key] = [ct_clients, f_ct]
+            # ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
+
+            # Round robin
+            f_ct = [1] * f
+            ct_clients = [1] * (num_clients - f)
             # print(_r, f, n, s_lr, model_name)
             server_name = server[0].__name__
             attack_name = atk[0].__name__
@@ -109,12 +132,12 @@ if __name__ == '__main__':
                             'sampler_args': {
                             }
                         },
-                    'client_ct': [1] * (num_clients - f),
+                    'client_ct': ct_clients,
                     'n': num_clients,
                     'f': f,
                     'f_type': atk[0],
                     'f_args': atk[1],
-                    'f_ct': [1] * f
+                    'f_ct': f_ct
                 },
                 'server': server[0],
                 'server_args': server[1],
@@ -151,6 +174,7 @@ if __name__ == '__main__':
     # Process data into dataframe
     dfs = []
     bft_dfs = []
+    client_dist_dfs = []
     for out in outputs2:
         name = out[1]['name']
         local_df = pd.DataFrame(
@@ -166,6 +190,11 @@ if __name__ == '__main__':
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
         local_df['name'] = '-'.join(parts[-2:])
+
+        ct = [[x, name, 'clients'] for x in out[1]['clients']['client_ct']]
+        ct += [[x, name, 'f_clients'] for x in out[1]['clients']['f_ct']]
+        local_client_dist_df = pd.DataFrame(ct, columns=['ct', 'alg', 'type'])
+        client_dist_dfs.append(local_client_dist_df)
         # local_bft_df = pd.DataFrame(out[0][2], columns=['action', 'client_id', 'lipschitz', 'round', 'is_byzantine', 'performance', 'global_score'])
         # local_bft_df = pd.DataFrame(out[0][2], columns=['server_age', 'client_id', 'grad_age', 'is_byzantine', 'client_weight_vec'])
         # local_bft_df['name'] = name
@@ -173,7 +202,9 @@ if __name__ == '__main__':
         dfs.append(local_df)
 
 
+
     server_df = pd.concat(dfs, ignore_index=True)
+    client_dist_df = pd.concat(client_dist_dfs, ignore_index=True)
     # bft_stats_df = pd.concat(bft_dfs, ignore_index=True)
 
     # bft_data = bft_stats_df.values
@@ -204,6 +235,11 @@ if __name__ == '__main__':
             plt.show()
         plt.close(fig)
 
+        plt.figure()
+        sns.kdeplot(data=client_dist_df, x='ct', hue='alg', fill=True, alpha=.5)
+
+        plt.title('ct distribution')
+        plt.show()
     # print(bft_stats_df.head(1))
     # fig = plt.figure(figsize=(8, 6))
     # g = sns.scatterplot(data=bft_stats_df, x='server_age', y='client_id', style='is_byzantine')
