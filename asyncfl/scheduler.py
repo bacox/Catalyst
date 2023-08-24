@@ -237,7 +237,6 @@ class Scheduler:
             # client.set_weights(agg_weights, server.get_age())
             client.move_to_cpu()
             model_age_stats.append([update_id, client.pid, client_age])
-            break
 
         return server_metrics, model_age_stats, server.bft_telemetry
 

@@ -93,16 +93,16 @@ if __name__ == '__main__':
         # @TODO: Make sure they have exactly the same schedule!!
 
         for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
-            # ct_key = f'{num_clients}-{f}'
-            # if ct_key not in generated_ct.keys():
-            #     ct_clients = np.abs(np.random.normal(50, 20.0, num_clients - f))
-            #     f_ct = np.abs(np.random.normal(50, 20.0, f))
-            #     generated_ct[ct_key] = [ct_clients, f_ct]
-            # ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
+            ct_key = f'{num_clients}-{f}'
+            if ct_key not in generated_ct.keys():
+                ct_clients = np.abs(np.random.normal(50, 20.0, num_clients - f))
+                f_ct = np.abs(np.random.normal(50, 20.0, f))
+                generated_ct[ct_key] = [ct_clients, f_ct]
+            ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
 
             # Round robin
-            f_ct = [1] * f
-            ct_clients = [1] * (num_clients - f)
+            # f_ct = [1] * f
+            # ct_clients = [1] * (num_clients - f)
 
             server_name = server[0].__name__
             attack_name = atk[0].__name__
@@ -126,9 +126,8 @@ if __name__ == '__main__':
                         'client': AFL.Client,
                         'client_args': {
                             'learning_rate': server_lr,
-                            'sampler': 'uniform',
-                            'sampler_args': {
-                            }
+                            'sampler': 'limitlabel',
+                            'sampler_args': (7, 42)
                         },
                     'client_ct': ct_clients,
                     'n': num_clients,

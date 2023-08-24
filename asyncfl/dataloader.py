@@ -1,7 +1,8 @@
+import logging
 from typing import Optional, Tuple, Any, Iterator, Union
 from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
-from asyncfl.datasampler import N_Labels, UniformSampler, get_sampler, uniform_sampler_func
+from asyncfl.datasampler import DirichletSampler, LimitLabelsSampler, LimitLabelsSamplerFlex, N_Labels, UniformSampler, get_sampler, uniform_sampler_func
 
 # 400
 # def afl_dataset(name: str, train_batch_size=128, test_batch_size=128, client_id=0, n_clients=1, seed=-1, use_iter=True, data_root: str = '~/data', sampler='uniform', sampler_args={}) -> Optional[
@@ -41,8 +42,24 @@ def afl_dataloader(dataset, train_batch_size=50,
     sampler="uniform",
     sampler_args={}
     ) -> DataLoader:
-    
-    indices = uniform_sampler_func(dataset, n_clients, client_id, seed, **sampler_args)
+
+    if sampler == 'dirichlet':
+        logging.info('Using dirichlet sampler')
+        ds = DirichletSampler(dataset, n_clients, client_id, (sampler_args))
+        indices = ds.indices
+    elif sampler == 'nlabels':
+        logging.info('Using N Labels sampler')
+        ds = N_Labels(dataset, n_clients, client_id, **sampler_args)
+        indices = ds.indices
+    elif sampler == 'limitlabelflex':
+        ds = LimitLabelsSamplerFlex(dataset, n_clients, client_id, (sampler_args))
+        indices = ds.indices
+    elif sampler == 'limitlabel':
+        ds = LimitLabelsSampler(dataset, n_clients, client_id, (sampler_args))
+        indices = ds.indices
+    else:
+        logging.info('Using uniform sampler')
+        indices = uniform_sampler_func(dataset, n_clients, client_id, seed, **sampler_args)
     
     ds_subset = Subset(dataset, indices)
     if data_type == "train":
