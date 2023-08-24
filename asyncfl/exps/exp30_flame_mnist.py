@@ -43,15 +43,15 @@ if __name__ == '__main__':
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         # num_byz_nodes = [0, 1, 3]
+        # num_byz_nodes = [1]
         num_byz_nodes = [0]
-        # num_byz_nodes = [0]
-        num_rounds = 10
+        num_rounds = 100
         idx = 1
         repetitions = 1
         exp_id = 0
         # server_lr = 0.1
         server_lr = 0.01
-        num_clients = 50
+        num_clients = 10
 
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
@@ -60,17 +60,17 @@ if __name__ == '__main__':
         
         servers = [
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
-            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
+            # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
             [AFL.SaSGD,{'learning_rate': server_lr}],
             # [AFL.FedAsync,{'learning_rate': server_lr}],
             # [AFL.FedWait,{'learning_rate': server_lr}],
-            [AFL.Server,{'learning_rate': server_lr}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
+            # [AFL.Server,{'learning_rate': server_lr}],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
 
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
@@ -93,19 +93,17 @@ if __name__ == '__main__':
         # @TODO: Make sure they have exactly the same schedule!!
 
         for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
-            ct_key = f'{num_clients}-{f}'
-            # print(ct_key, ct_key in generated_ct.keys())
+            # ct_key = f'{num_clients}-{f}'
             # if ct_key not in generated_ct.keys():
             #     ct_clients = np.abs(np.random.normal(50, 20.0, num_clients - f))
             #     f_ct = np.abs(np.random.normal(50, 20.0, f))
-            #     print('Regenerate')
             #     generated_ct[ct_key] = [ct_clients, f_ct]
             # ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
 
             # Round robin
             f_ct = [1] * f
             ct_clients = [1] * (num_clients - f)
-            # print(_r, f, n, s_lr, model_name)
+
             server_name = server[0].__name__
             attack_name = atk[0].__name__
             key_name = f'f{f}_n{num_clients}_lr{server_lr}_{model_name.replace("-", "_")}_{server_name}'
@@ -175,8 +173,13 @@ if __name__ == '__main__':
     dfs = []
     bft_dfs = []
     client_dist_dfs = []
+    interaction_dfs = []
     for out in outputs2:
         name = out[1]['name']
+        interaction_events = out[0][3]
+        ie_df = pd.DataFrame(interaction_events, columns=['client_id', 'wall_time', 'min_ct', 'client_ct'])
+        ie_df['alg'] = name
+        interaction_dfs.append(ie_df)
         local_df = pd.DataFrame(
             out[0][0], columns=['round', 'accuracy', 'loss'])
         # local_df['name'] = f"{name.split('-')[-1]}"
@@ -205,6 +208,7 @@ if __name__ == '__main__':
 
     server_df = pd.concat(dfs, ignore_index=True)
     client_dist_df = pd.concat(client_dist_dfs, ignore_index=True)
+    interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
     # bft_stats_df = pd.concat(bft_dfs, ignore_index=True)
 
     # bft_data = bft_stats_df.values
@@ -240,6 +244,16 @@ if __name__ == '__main__':
 
         plt.title('ct distribution')
         plt.show()
+
+
+        single_interaction_df = interaction_events_df[interaction_events_df['alg'] == list(interaction_events_df['alg'].unique())[0]]
+        print(single_interaction_df)
+
+        plt.figure()
+        sns.kdeplot(data=single_interaction_df, x='client_ct')
+        plt.title('Compute kde')
+        plt.show()
+
     # print(bft_stats_df.head(1))
     # fig = plt.figure(figsize=(8, 6))
     # g = sns.scatterplot(data=bft_stats_df, x='server_age', y='client_id', style='is_byzantine')

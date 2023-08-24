@@ -95,6 +95,7 @@ class Scheduler:
 
         def create_client(self, pid, c_ct, client_class, client_args):
             node_id = f"c_{pid}"
+            # print(client_class)
             self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
 
@@ -130,6 +131,12 @@ class Scheduler:
             }
 
         clients = [create_mock_client(idx, c_ct) for (idx, c_ct) in ct_data.items()]
+        # Make sure to sort clients! It is not ordered!
+        clients = sorted(clients, key=lambda x: x['_id'])
+        # print(f'Clients:')
+        # [print(x) for x in clients]
+        wall_time = 0
+        events = []
         sequence = []
         for _round in range(num_rounds):
             rc = min(clients, key=lambda x: x["ct_left"])
@@ -138,14 +145,24 @@ class Scheduler:
             sequence.append(rc["_id"])
 
             # Update the time for all the clients with the elapsed time of min_ct
+            wall_time += min_ct
+            # print(wall_time)
+            events.append([rc['_id'], wall_time, min_ct, rc['ct']])
             for c in clients:
-                c["ct_left"] -= min_ct + 1
+                c["ct_left"] -= min_ct
 
             # Perform client server interaction between server and min_ct
             # Reset compute time of min_ct
             rc["ct_left"] = rc["ct"]
             clients[rc["_id"]] = rc
-        return sequence
+        # print(f'clients{clients}')
+        # print(f'ct_data: {ct_data}')
+
+        # print(f'events {events}')
+        # [print(x) for x in events]
+        
+
+        return sequence, events
     
     
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
@@ -158,13 +175,12 @@ class Scheduler:
             if not ct_clients:
                 ct_clients = [1] * len(self.get_clients())
 
-            interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
-            interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
-                :num_rounds
-            ]
+            interaction_sequence, interaction_events = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
+            # interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
+            #     :num_rounds
+            # ]
         
-        print(interaction_sequence)
-        print(self.compute_times)
+        # print(self.compute_times)
         
         # Create entities
         clients: List[Client] = self.get_clients()
@@ -188,7 +204,7 @@ class Scheduler:
             server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=batch_limit, test_frequency=test_frequency)
 
 
-        return server_metrics, model_age_stats, bft_telemetry
+        return server_metrics, model_age_stats, bft_telemetry, interaction_events
 
     def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=25):
         # Play all the server interactions
@@ -221,6 +237,7 @@ class Scheduler:
             # client.set_weights(agg_weights, server.get_age())
             client.move_to_cpu()
             model_age_stats.append([update_id, client.pid, client_age])
+            break
 
         return server_metrics, model_age_stats, server.bft_telemetry
 
