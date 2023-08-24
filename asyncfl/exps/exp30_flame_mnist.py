@@ -253,6 +253,22 @@ if __name__ == '__main__':
         plt.title('Compute kde')
         plt.show()
 
+
+        # Time based statistics
+        print(single_interaction_df)
+        local_df['wall_time'] = single_interaction_df['wall_time']
+
+        fig = plt.figure(figsize=(8, 6))
+        g = sns.lineplot(data=local_df, x='wall_time', y='accuracy', hue='name',errorbar=('ci', 95))
+        plt.title(f'Algorithms f={f_num}')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Test accuracy')
+        if g.legend_:
+            g.legend_.set_title(None)
+        plt.show()
+        plt.close(fig)
+ 
+
     # print(bft_stats_df.head(1))
     # fig = plt.figure(figsize=(8, 6))
     # g = sns.scatterplot(data=bft_stats_df, x='server_age', y='client_id', style='is_byzantine')
