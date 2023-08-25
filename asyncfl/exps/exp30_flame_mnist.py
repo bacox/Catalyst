@@ -34,7 +34,7 @@ if __name__ == '__main__':
     if not args.o:
         # Define configuration
 
-        pool_size = 1
+        pool_size = 4
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -64,10 +64,10 @@ if __name__ == '__main__':
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
-            [AFL.SaSGD,{'learning_rate': server_lr}],
+            # [AFL.SaSGD,{'learning_rate': server_lr}],
             # [AFL.FedAsync,{'learning_rate': server_lr}],
             # [AFL.FedWait,{'learning_rate': server_lr}],
-            # [AFL.Server,{'learning_rate': server_lr}],
+            [AFL.Server,{'learning_rate': server_lr}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
@@ -117,8 +117,36 @@ if __name__ == '__main__':
             exp_id += 1
             configs.append({
                 'exp_id': exp_id,
+                'aggregation_type': 'sync',
+                'client_participartion': 0.2,
+                'name': f'{server_name}-sync-{key_name}',
+                'num_rounds': num_rounds,
+                'client_batch_size': -1,
+                'eval_interval': 5,
+                'clients': {
+                        'client': AFL.Client,
+                        'client_args': {
+                            'learning_rate': server_lr,
+                            'sampler': 'limitlabel',
+                            'sampler_args': (7, 42)
+                        },
+                    'client_ct': ct_clients,
+                    'n': num_clients,
+                    'f': f,
+                    'f_type': atk[0],
+                    'f_args': atk[1],
+                    'f_ct': f_ct
+                },
+                'server': server[0],
+                'server_args': server[1],
+                'dataset_name': dataset,
+                'model_name': model_name
+            })
+            configs.append({
+                'exp_id': exp_id,
                 'aggregation_type': 'async',
-                'name': f'{server_name}-{key_name}',
+                'client_participartion': 0.2,
+                'name': f'{server_name}-async-{key_name}',
                 'num_rounds': num_rounds,
                 'client_batch_size': -1,
                 'eval_interval': 5,
@@ -183,6 +211,8 @@ if __name__ == '__main__':
             out[0][0], columns=['round', 'accuracy', 'loss'])
         # local_df['name'] = f"{name.split('-')[-1]}"
         parts = name.split('-')[-1].split('_')
+        print(name.split('-')[-2])
+        print(parts)
         f = int(parts[0][1:])
         byz_type = 'None'
         if f:
@@ -191,7 +221,8 @@ if __name__ == '__main__':
         local_df['f'] = f
         local_df['byz_type'] = byz_type
         local_df['name'] = '-'.join([f'f{f}', byz_type])
-        local_df['name'] = '-'.join(parts[-2:])
+        local_df['name'] = '-'.join(parts[-2:] + [name.split('-')[-2]])
+        print(f"name-> {'-'.join(parts[-2:])}")
 
         ct = [[x, name, 'clients'] for x in out[1]['clients']['client_ct']]
         ct += [[x, name, 'f_clients'] for x in out[1]['clients']['f_ct']]

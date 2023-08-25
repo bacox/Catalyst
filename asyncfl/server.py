@@ -7,6 +7,17 @@ from .client import Client
 from .network import flatten_dict, get_model_by_name, model_gradients, flatten, unflatten_dict, unflatten_g
 import logging
 
+
+def fed_avg_vec(params: List[np.ndarray]) -> np.ndarray:
+    '''
+    Use to average the clients weights when representation a N 1 dimensional numpy vectors
+    '''
+    logging.info('[Server] Running (sync) fed average vector version')
+    weigths = np.ones(len(params))
+    averaged: np.ndarray = np.average(params, axis=0, weights=weigths)
+    return averaged
+
+# @TODO: Rewrite this to make it work with numpy arrays?
 def fed_avg(parameters, sizes = []):
     if not sizes:
         sizes = [1] * len(parameters)

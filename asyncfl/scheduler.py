@@ -1,17 +1,18 @@
 import copy
+import inspect
 import json
 from multiprocessing import Lock, Pool, current_process, RLock, Process
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 import traceback
-from typing import Any, List, Union
+from typing import Any, List, Tuple, Union
 import torch
 from tqdm.auto import tqdm
 import copy
 from asyncfl.dataloader import afl_dataset2
 from .network import flatten, unflatten_b, unflatten
 from asyncfl.network import flatten
-from .server import Server, fed_avg
+from .server import Server, fed_avg, fed_avg_vec
 from .client import Client
 from .task import Task
 import numpy as np
@@ -122,7 +123,44 @@ class Scheduler:
     def dereference(self, e_id):
         return self.entities[e_id]
 
+    @staticmethod
+    def compute_interaction_schedule(ct_data: dict, num_rounds: int) -> Tuple[List[Any], List[Any]]:
+        def create_mock_client(_id, ct):
+            return {
+                "_id": _id,
+                "ct": ct,
+                "ct_left": ct,
+            }
+
+        clients = [create_mock_client(idx, c_ct) for (idx, c_ct) in ct_data.items()]
+        # Make sure to sort clients! It is not ordered!
+        clients = sorted(clients, key=lambda x: x['_id'])
+        wall_time = 0
+        events = []
+        sequence = []
+        for _round in range(num_rounds):
+            rc = min(clients, key=lambda x: x["ct_left"])
+            # Find client the finishes first
+            min_ct = rc["ct_left"]
+            sequence.append(rc["_id"])
+
+            # Update the time for all the clients with the elapsed time of min_ct
+            wall_time += min_ct
+            events.append([rc['_id'], wall_time, min_ct, rc['ct']])
+            for c in clients:
+                c["ct_left"] -= min_ct
+
+            # Perform client server interaction between server and min_ct
+            # Reset compute time of min_ct
+            rc["ct_left"] = rc["ct"]
+            clients[rc["_id"]] = rc
+        return sequence, events
+    
     def compute_interaction_sequence(self, ct_data, num_rounds):
+        """
+        Deprecated function
+        """
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         def create_mock_client(_id, ct):
             return {
                 "_id": _id,
@@ -168,14 +206,15 @@ class Scheduler:
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
     def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
-        
+        interaction_sequence, interaction_events = [], []
         if fl_type != 'sync':
             logging.info('Running async')
             # Compute the clients server interactions
             if not ct_clients:
                 ct_clients = [1] * len(self.get_clients())
 
-            interaction_sequence, interaction_events = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
+            # interaction_sequence, interaction_events = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
+            interaction_sequence, interaction_events = Scheduler.compute_interaction_schedule(self.compute_times, num_rounds + 1)
             # interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
             #     :num_rounds
             # ]
@@ -199,7 +238,7 @@ class Scheduler:
 
         # Iterate rounds
         if fl_type == 'sync':
-            server_metrics, bft_telemetry = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = batch_limit, test_frequency=test_frequency)
+            server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = batch_limit, test_frequency=test_frequency)
         else:
             server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=batch_limit, test_frequency=test_frequency)
 
@@ -240,19 +279,27 @@ class Scheduler:
 
         return server_metrics, model_age_stats, server.bft_telemetry
 
-    def _sync_exec_loop(self, num_rounds: int, server: Server, clients, client_participation,  position = 0, add_descr='', batch_limit = -1, test_frequency=5):
+    def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, add_descr='', batch_limit = -1, test_frequency=5):
         server_metrics = []
         update_counter = 0 # Keep track of the number of total updates from clients
         agg_weights = server.get_model_weights()
+        agg_weight_vec: np.ndarray = server.get_model_dict_vector()
+        interaction_events = []
+        wall_time = 0
         for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None)):
             # Client selection
             num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
-            selected_clients = np.random.choice(clients, num_clients, replace=False)  # type: ignore
+            selected_clients:List[Client] = np.random.choice(clients, num_clients, replace=False)  # type: ignore
+            cts = [self.compute_times[x.pid] for x in selected_clients] # Get all compute times of selected clients
+            round_time : float = np.max(cts) # type:ignore
+            logging.info(f'Round {_idx} will take {round_time} to complete')
             
             # Send models to clients
             for client in clients:
                 client.move_to_gpu()
-                client.set_weights(agg_weights, server.get_age())
+                client.load_model_dict_vector(agg_weight_vec)
+                client.local_age = server.get_age()
+                # client.set_weights(agg_weights, server.get_age())
                 client.move_to_cpu()
 
             # Test progress
@@ -268,16 +315,21 @@ class Scheduler:
                 client.train(num_batches=batch_limit)
                 is_byzantine = client.is_byzantine
                 c_id = client.get_pid()
-                client_weights.append(client.get_weights())
+                client_weights.append(client.get_model_dict_vector())
+                # client_weights.append(client.get_weights())
                 byz_clients.append((c_id, is_byzantine))
                 client.move_to_cpu()
             
             # Aggregate
-            agg_weights = fed_avg(client_weights)
-            server.set_weights(agg_weights)
+            # agg_weights = fed_avg(client_weights)
+            agg_weight_vec = fed_avg_vec(client_weights)
+            server.load_model_dict_vector(agg_weight_vec)
+            # server.set_weights(agg_weights)
+            wall_time += round_time
+            interaction_events.append([0, wall_time, round_time, round_time])
             server.incr_age()
         
-        return server_metrics, server.bft_telemetry
+        return server_metrics, server.bft_telemetry, interaction_events
 
 
     def run_sync_tasks(
@@ -286,7 +338,7 @@ class Scheduler:
         """
         Deprecated function
         """
-        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         """To run Synchronous Federated Learning.
 
         Args:
@@ -374,7 +426,7 @@ class Scheduler:
         """
         Deprecated function
         """
-        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         """
         To run Asynchronous Federated Learning
         @TODO: Put dict of interaction sequence as argument
@@ -446,7 +498,7 @@ class Scheduler:
         """
         Deprecated function
         """
-        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         # Create task list
         tasks = []
         task: Task = Task(self.get_clients()[0], Client.get_pid)
@@ -591,7 +643,7 @@ class Scheduler:
         """
         Deprecated function
         """
-        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         sched = Scheduler(**cfg)
         num_rounds = cfg["num_rounds"]
         # worker_id = int(current_process()._identity[0])
@@ -612,7 +664,7 @@ class Scheduler:
         """
         Deprecated function
         """
-        raise DeprecationWarning(f"Function '{__name__}' is deprecated")
+        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
         return [
             Scheduler.run_util_sync(cfg)
             for cfg in tqdm(list_of_configs, total=len(list_of_configs), position=0, leave=None, desc="Total")
