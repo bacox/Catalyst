@@ -19,6 +19,7 @@ import numpy as np
 import time
 from threading import Thread
 import logging
+import asyncio
 
 def dict_convert_class_to_strings(dictionary: dict):
     d = copy.deepcopy(dictionary)
@@ -286,9 +287,11 @@ class Scheduler:
         agg_weight_vec: np.ndarray = server.get_model_dict_vector()
         interaction_events = []
         wall_time = 0
-        for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None)):
+        num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
+
+        num_rounds = num_rounds // num_clients
+        for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None, total=num_rounds*num_clients)):
             # Client selection
-            num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
             selected_clients:List[Client] = np.random.choice(clients, num_clients, replace=False)  # type: ignore
             cts = [self.compute_times[x.pid] for x in selected_clients] # Get all compute times of selected clients
             round_time : float = np.max(cts) # type:ignore
@@ -296,6 +299,7 @@ class Scheduler:
             
             # Send models to clients
             for client in clients:
+
                 client.move_to_gpu()
                 client.load_model_dict_vector(agg_weight_vec)
                 client.local_age = server.get_age()
@@ -310,6 +314,8 @@ class Scheduler:
             
             client_weights = []
             byz_clients = []
+
+            
             for _local_id, client in enumerate(selected_clients):
                 client.move_to_gpu()
                 client.train(num_batches=batch_limit)
@@ -319,6 +325,7 @@ class Scheduler:
                 # client_weights.append(client.get_weights())
                 byz_clients.append((c_id, is_byzantine))
                 client.move_to_cpu()
+                pbar.update()
             
             # Aggregate
             # agg_weights = fed_avg(client_weights)
@@ -559,7 +566,7 @@ class Scheduler:
                     *sched.execute(
                         num_rounds,
                         position=worker_id,
-                        add_descr=f"[Worker {worker_id}] ",
+                        add_descr=f"[W{worker_id}: {safe_cfg['server']}] ",
                         client_participation=cfg["client_participartion"],
                         fl_type=cfg["aggregation_type"],
                         batch_limit=cfg["client_batch_size"],

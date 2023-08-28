@@ -22,11 +22,11 @@ if __name__ == '__main__':
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 30: Flame baselines test mnist')
+    print('Exp 31: Beat BaSGD')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp30_flame_mnist'
+    exp_name = 'exp31_stable_model'
     data_file = data_path / f'{exp_name}.json'
 
     # args.o = True
@@ -51,7 +51,7 @@ if __name__ == '__main__':
         exp_id = 0
         # server_lr = 0.1
         server_lr = 0.01
-        num_clients = 100
+        num_clients = 30
 
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
@@ -60,7 +60,7 @@ if __name__ == '__main__':
         
         servers = [
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
-            # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
@@ -68,7 +68,7 @@ if __name__ == '__main__':
             # [AFL.FedAsync,{'learning_rate': server_lr}],
             # [AFL.FedWait,{'learning_rate': server_lr}],
             [AFL.Server,{'learning_rate': server_lr}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
 
@@ -119,33 +119,33 @@ if __name__ == '__main__':
             # if key_name not in f0_keys:
             #     f0_keys.append(key_name)
             exp_id += 1
-            configs.append({
-                'exp_id': exp_id,
-                'aggregation_type': 'sync',
-                'client_participartion': 1,
-                'name': f'{server_name}-sync-{key_name}',
-                'num_rounds': num_rounds,
-                'client_batch_size': -1,
-                'eval_interval': 1,
-                'clients': {
-                        'client': AFL.Client,
-                        'client_args': {
-                            'learning_rate': server_lr,
-                            'sampler': 'limitlabel',
-                            'sampler_args': (7, 42)
-                        },
-                    'client_ct': ct_clients,
-                    'n': num_clients,
-                    'f': f,
-                    'f_type': atk[0],
-                    'f_args': atk[1],
-                    'f_ct': f_ct
-                },
-                'server': server[0],
-                'server_args': server[1],
-                'dataset_name': dataset,
-                'model_name': model_name
-            })
+            # configs.append({
+            #     'exp_id': exp_id,
+            #     'aggregation_type': 'sync',
+            #     'client_participartion': 1,
+            #     'name': f'{server_name}-sync-{key_name}',
+            #     'num_rounds': num_rounds,
+            #     'client_batch_size': -1,
+            #     'eval_interval': 1,
+            #     'clients': {
+            #             'client': AFL.Client,
+            #             'client_args': {
+            #                 'learning_rate': server_lr,
+            #                 'sampler': 'limitlabel',
+            #                 'sampler_args': (7, 42)
+            #             },
+            #         'client_ct': ct_clients,
+            #         'n': num_clients,
+            #         'f': f,
+            #         'f_type': atk[0],
+            #         'f_args': atk[1],
+            #         'f_ct': f_ct
+            #     },
+            #     'server': server[0],
+            #     'server_args': server[1],
+            #     'dataset_name': dataset,
+            #     'model_name': model_name
+            # })
             configs.append({
                 'exp_id': exp_id,
                 'aggregation_type': 'async',

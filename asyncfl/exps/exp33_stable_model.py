@@ -22,11 +22,11 @@ if __name__ == '__main__':
                         help="Autocomplete missing experiments. Based on the results in the datafile, missing experiment will be run.", action='store_true')
     args = parser.parse_args()
 
-    print('Exp 30: Flame baselines test mnist')
+    print('Exp 33: Beat BaSGD')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp30_flame_mnist'
+    exp_name = 'exp33_stable_model'
     data_file = data_path / f'{exp_name}.json'
 
     # args.o = True
@@ -43,24 +43,26 @@ if __name__ == '__main__':
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         # num_byz_nodes = [0, 1, 3]
-        # num_byz_nodes = [1]
-        num_byz_nodes = [0]
+        num_byz_nodes = [4]
+        # num_byz_nodes = [0]
         num_rounds = 400
         idx = 1
         repetitions = 1
         exp_id = 0
         # server_lr = 0.1
         server_lr = 0.01
-        num_clients = 100
+        num_clients = 40
 
         attacks = [
-            [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            # [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
+            # [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
+            [AFL.RDCLient, {'a_atk':0.1, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
+        # print(num_clients //10)
+        # exit(1)
         
         servers = [
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
-            # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 10}],
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
@@ -68,6 +70,7 @@ if __name__ == '__main__':
             # [AFL.FedAsync,{'learning_rate': server_lr}],
             # [AFL.FedWait,{'learning_rate': server_lr}],
             [AFL.Server,{'learning_rate': server_lr}],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 2}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 4}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
@@ -99,8 +102,8 @@ if __name__ == '__main__':
         for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
             ct_key = f'{num_clients}-{f}'
             if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(100, 10.0, num_clients - f))
-                f_ct = np.abs(np.random.normal(100, 10.0, f))
+                ct_clients = np.abs(np.random.normal(100, 40.0, num_clients - f))
+                f_ct = np.abs(np.random.normal(100, 40.0, f))
                 generated_ct[ct_key] = [ct_clients, f_ct]
             ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
 
@@ -119,33 +122,33 @@ if __name__ == '__main__':
             # if key_name not in f0_keys:
             #     f0_keys.append(key_name)
             exp_id += 1
-            configs.append({
-                'exp_id': exp_id,
-                'aggregation_type': 'sync',
-                'client_participartion': 1,
-                'name': f'{server_name}-sync-{key_name}',
-                'num_rounds': num_rounds,
-                'client_batch_size': -1,
-                'eval_interval': 1,
-                'clients': {
-                        'client': AFL.Client,
-                        'client_args': {
-                            'learning_rate': server_lr,
-                            'sampler': 'limitlabel',
-                            'sampler_args': (7, 42)
-                        },
-                    'client_ct': ct_clients,
-                    'n': num_clients,
-                    'f': f,
-                    'f_type': atk[0],
-                    'f_args': atk[1],
-                    'f_ct': f_ct
-                },
-                'server': server[0],
-                'server_args': server[1],
-                'dataset_name': dataset,
-                'model_name': model_name
-            })
+            # configs.append({
+            #     'exp_id': exp_id,
+            #     'aggregation_type': 'sync',
+            #     'client_participartion': 1,
+            #     'name': f'{server_name}-sync-{key_name}',
+            #     'num_rounds': num_rounds,
+            #     'client_batch_size': -1,
+            #     'eval_interval': 1,
+            #     'clients': {
+            #             'client': AFL.Client,
+            #             'client_args': {
+            #                 'learning_rate': server_lr,
+            #                 'sampler': 'limitlabel',
+            #                 'sampler_args': (7, 42)
+            #             },
+            #         'client_ct': ct_clients,
+            #         'n': num_clients,
+            #         'f': f,
+            #         'f_type': atk[0],
+            #         'f_args': atk[1],
+            #         'f_ct': f_ct
+            #     },
+            #     'server': server[0],
+            #     'server_args': server[1],
+            #     'dataset_name': dataset,
+            #     'model_name': model_name
+            # })
             configs.append({
                 'exp_id': exp_id,
                 'aggregation_type': 'async',

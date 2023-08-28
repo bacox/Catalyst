@@ -1,3 +1,4 @@
+import numpy as np
 from asyncfl import Client
 from asyncfl.network import flatten, flatten_b, model_gradients, unflatten
 import torch
@@ -28,3 +29,7 @@ class NGClient(Client):
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
         return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz, self.convergance, self.local_age, self.is_byzantine]
+    
+    def get_model_dict_vector(self) -> np.ndarray:
+
+        return super().get_model_dict_vector() * (-1.0 * self.magnitude)

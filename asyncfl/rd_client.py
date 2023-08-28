@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from asyncfl import Client
@@ -29,6 +30,11 @@ class RDCLient(Client):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
         g = self.g_flat.cpu()
         return [torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy(), flatten_b(self.network), self.lipschitz, self.convergance, self.local_age, self.is_byzantine]
+    
+    def get_model_dict_vector(self) -> np.ndarray:
+        weight_vec = super().get_model_dict_vector_t()
+        return torch.add(weight_vec, torch.randn_like(weight_vec).mul_(self.a_atk * torch.norm(weight_vec, 2))).cpu().numpy()
+        # return super().get_model_dict_vector_t()
 
 # class NGClient(Client):
 #     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, magnitude=10):

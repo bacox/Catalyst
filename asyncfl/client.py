@@ -72,6 +72,9 @@ class Client:
     def get_model_dict_vector(self) -> np.ndarray:
         return flatten_dict(self.network).cpu().numpy()
     
+    def get_model_dict_vector_t(self) ->torch.Tensor:
+        return flatten_dict(self.network)
+    
     def load_model_dict_vector(self, vec: np.ndarray):
         vec = torch.from_numpy(vec).to(self.device)
         unflatten_dict(self.network, vec)
