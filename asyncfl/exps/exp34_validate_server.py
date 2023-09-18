@@ -63,7 +63,7 @@ if __name__ == '__main__':
         servers = [
             # [AFL.FlameServer,{'learning_rate': server_lr*5, 'hist_size': 4}],
             [AFL.ValidateServer,{'learning_rate': server_lr, 'hist_size': 2*num_byz_nodes[0]+1}],
-            # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 20}],
             # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': 30}],
             # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
@@ -189,7 +189,7 @@ if __name__ == '__main__':
                 configs = [x for x in configs if x['exp_id'] not in keys]
                 # @TODO: Append to output instead of overwriting
 
-        outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file, clear_file=not args.autocomplete)
+        outputs = AFL.Scheduler.run_multiple(configs, pool_size=pool_size, outfile=data_file, clear_file=not args.autocomplete, multi_thread=True)
 
     # Load raw data from file
     outputs2 = ''

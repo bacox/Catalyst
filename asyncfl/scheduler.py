@@ -93,6 +93,7 @@ class Scheduler:
 
         self.train_set = afl_dataset2(self.dataset_name, data_type="train")
         self.test_set = afl_dataset2(self.dataset_name, data_type="test")
+        logging.info('Creating server')
         self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, **config["server_args"])
 
         def create_client(self, pid, c_ct, client_class, client_args):
@@ -107,6 +108,7 @@ class Scheduler:
             p.start()
             return p
 
+        logging.info('Creating clients')
         loading_processes = []
         for pid, (c_ct, client_class, client_args) in enumerate(client_data):
             # print(pid, c_ct, client_class, client_args)
@@ -219,6 +221,8 @@ class Scheduler:
             # interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
             #     :num_rounds
             # ]
+        else:
+            logging.info('Running synchronous')
         
         # print(self.compute_times)
         
@@ -598,7 +602,7 @@ class Scheduler:
             logging.error(traceback.format_exc())
 
     @staticmethod
-    def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False):
+    def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False, multi_thread = True):
         pool_size = min(pool_size, len(list_of_configs))
         logging.basicConfig(format='%(asctime)s - %(levelname)s:%(message)s', level=logging.DEBUG, filename='debug.log')
         # install_mp_handler()
@@ -611,7 +615,8 @@ class Scheduler:
         lock = None
         cfg_args = [(x, outfile, lock) for x in list_of_configs]
         logging.info(f"Pool size = {pool_size}")
-        if pool_size > 1:
+        logging.info(f'Run multi-threaded ? {multi_thread}')
+        if pool_size > 1 and multi_thread:
             pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
             
             # with logging_redirect_tqdm():
@@ -628,53 +633,7 @@ class Scheduler:
                 if x
             ]
         else:
+            print('Running single-threaded')
             outputs = [Scheduler.run_util(x) for x in cfg_args]
         print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         return outputs
-
-    @staticmethod
-    def run_pm(list_of_configs, pool_size=5):
-        start_time = time.time()
-        pm = PoolManager(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-        pbar = tqdm(total=len(list_of_configs), position=0, leave=None, desc="Total")
-        for cfg in list_of_configs:
-            cfg["task_cap"] = cfg.get("task_cap", 1.0 / pool_size)
-            pm.add_task(Scheduler.run_util, [cfg], cfg["task_cap"])
-
-        pm.run(pbar=pbar)
-        results = [x.get() for x in pm.get_results()]
-        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
-        return results
-
-    @staticmethod
-    def run_util_sync(cfg):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        sched = Scheduler(**cfg)
-        num_rounds = cfg["num_rounds"]
-        # worker_id = int(current_process()._identity[0])
-        worker_id = 1
-        cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
-        return [
-            sched.run_sync_tasks(
-                num_rounds,
-                position=worker_id,
-                add_descr=f"[Worker {worker_id}] ",
-                client_participation=cfg["client_participartion"],
-            ),
-            cfg,
-        ]
-
-    @staticmethod
-    def run_sync(list_of_configs, pool_size=5):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        return [
-            Scheduler.run_util_sync(cfg)
-            for cfg in tqdm(list_of_configs, total=len(list_of_configs), position=0, leave=None, desc="Total")
-        ]
-        # return [Scheduler.run_util_sync(cfg) for cfg in list_of_configs]
