@@ -333,6 +333,8 @@ class Scheduler:
             
             # Aggregate
             # agg_weights = fed_avg(client_weights)
+
+            # @TODO: Add the ability to use other algorithms than fed_avg
             agg_weight_vec = fed_avg_vec(client_weights)
             server.load_model_dict_vector(agg_weight_vec)
             # server.set_weights(agg_weights)
