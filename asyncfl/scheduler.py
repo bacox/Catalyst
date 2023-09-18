@@ -599,6 +599,7 @@ class Scheduler:
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False):
+        pool_size = min(pool_size, len(list_of_configs))
         logging.basicConfig(format='%(asctime)s - %(levelname)s:%(message)s', level=logging.DEBUG, filename='debug.log')
         # install_mp_handler()
         if clear_file and outfile and Path(outfile).exists():

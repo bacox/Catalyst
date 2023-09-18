@@ -140,14 +140,19 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
             cos_i.append(cos_ij.item())
         cos_list.append(cos_i)
 
+    logging.info(f'Cos_list: {cos_list}' )
+
     num_clients = max(int(args['frac'] * args['num_users']), 1)
-    num_malicious_clients = int(args['malicious'] * num_clients)
+    num_malicious_clients = int(args['malicious'])
+    min_cluster_size = num_clients//(num_malicious_clients*2 + 1)
     # logging.info(f'[hdbscan] {cos_list}')
     # for cl in cos_list:
     #     logging.info(f'[hdbscan] {cl}')
     # for lm in local_models:
     #     logging.info(f'[hdbscan] lm: {lm}')
-    clusterer = hdbscan.HDBSCAN(min_cluster_size=num_clients//2 + 1,min_samples=1,allow_single_cluster=True).fit(cos_list)
+    logging.info(f'[Flame debug] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz" {num_malicious_clients}')
+
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
 
 
 
@@ -206,6 +211,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
     #     temp = copy.deepcopy(var)
     #     temp = temp.normal_(mean=0,std=args.noise*clip_value)
     #     var += temp
+    logging.info(f'[FLAME_V2] cluster labels: {clusterer.labels_}')
     return global_model, last_is_in_majority
 
 
@@ -238,6 +244,7 @@ def flame(local_models, update_params, global_model, args, alpha=0.1):
     num_clients = max(int(args['frac'] * args['num_users']), 1)
     num_malicious_clients = int(args['malicious'] * num_clients)
     num_benign_clients = num_clients - num_malicious_clients
+    logging.info(f'[Flame debug] num_clients: {num_clients}, min_cluster_size: {num_clients//2 + 1}')
     clusterer = hdbscan.HDBSCAN(min_cluster_size=num_clients//2 + 1,min_samples=1,allow_single_cluster=True).fit(cos_list)
     # logging.info(f'Cluster labels: {clusterer.labels_}')
     benign_client = []
