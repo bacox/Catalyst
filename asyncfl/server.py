@@ -12,7 +12,7 @@ def fed_avg_vec(params: List[np.ndarray]) -> np.ndarray:
     '''
     Use to average the clients weights when representation a N 1 dimensional numpy vectors
     '''
-    logging.info('[Server] Running (sync) fed average vector version')
+    logging.info('Running (sync) fed average vector version')
     weigths = np.ones(len(params))
     averaged: np.ndarray = np.average(params, axis=0, weights=weigths)
     return averaged
@@ -58,13 +58,13 @@ def get_update_no_bn(update, model, alpha=0.5):
     '''
     pass
 
-def no_defense_vec_update(params: List[np.ndarray], global_params: np.ndarray, server_rl = 1) -> np.ndarray:
+def no_defense_vec_update(params: List[np.ndarray], global_params: np.ndarray, server_rl = 1.0) -> np.ndarray:
     summed: np.ndarray = np.sum(params, axis=0)
     # logging.info(f'Shape of summed = {summed.shape}')
     # logging.info(f'Shape of global params = {global_params.shape}')
     return global_params + server_rl * (summed / float(len(params)))
 
-def no_defense_update(params, global_parameters, learning_rate=1):
+def no_defense_update(params, global_parameters, learning_rate=1.0):
     total_num = len(params)
     sum_parameters = None
     for i in range(total_num):
@@ -165,8 +165,8 @@ class Server:
         unflatten_dict(self.network, vec)
 
     def load_model_dict_vector(self, vec: np.ndarray):
-        vec = torch.from_numpy(vec).to(self.device)
-        unflatten_dict(self.network, vec)
+        tensor_vec = torch.from_numpy(vec).to(self.device)
+        unflatten_dict(self.network, tensor_vec)
 
     def get_model_gradients(self):
         model_gradients(self.network)
@@ -184,6 +184,18 @@ class Server:
     def incr_age(self):
         self.age += 1
 
+
+    def aggregate_sync(self, params: List[np.ndarray], byz_clients) -> np.ndarray:
+        '''
+        Use to average the clients weights when representation a N 1 dimensional numpy vectors
+        '''
+        logging.info('[Server] Running (sync) fed average vector version')
+        weigths = np.ones(len(params))
+        averaged: np.ndarray = np.average(params, axis=0, weights=weigths)
+
+        self.load_model_dict_vector(averaged)
+        self.incr_age()
+        return averaged.copy()
     
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         logging.info(f'Default server dict_vector update of client {client_id}')

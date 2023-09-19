@@ -12,6 +12,7 @@ __pycache__/
 *$py.class
 data.json
 graph.png
+graphs/*
 
 # C extensions
 *.so

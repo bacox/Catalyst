@@ -5,7 +5,7 @@ import torch
 import copy
 import time
 import hdbscan
-from asyncfl.server import Server, get_update, no_defense_update, no_defense_vec_update, parameters_dict_to_vector_flt
+from asyncfl.server import Server, fed_avg_vec, get_update, no_defense_update, no_defense_vec_update, parameters_dict_to_vector_flt
 
 def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
     vec = []
@@ -106,7 +106,7 @@ def parameters_dict_to_vector(net_dict) -> torch.Tensor:
 #     sm_of_signs[sm_of_signs >= args.robustLR_threshold] = args.server_lr 
 #     return sm_of_signs.to(args.gpu)
 
-def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
+def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_sync = False, min_cluster_size = -1):
     '''
     What are the local models?
     - The type should be an np.ndarray
@@ -130,6 +130,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
 
     '''
     local_models = [torch.from_numpy(x).cuda() for x in local_models]
+    logging.info(local_models)
     cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
     cos_list=[]
     for i in range(len(local_models)):
@@ -138,20 +139,23 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
             cos_ij = 1- cos(local_models[i],local_models[j])
             # cos_i.append(round(cos_ij.item(),4))
             cos_i.append(cos_ij.item())
-        cos_list.append(cos_i)
+        cos_list.append(np.nan_to_num(cos_i))
 
-    logging.info(f'Cos_list: {cos_list}' )
+    # logging.info(f'Cos_list: {cos_list}' )
 
     num_clients = max(int(args['frac'] * args['num_users']), 1)
     num_malicious_clients = int(args['malicious'])
-    min_cluster_size = num_clients//(num_malicious_clients*2 + 1)
+    if not min_cluster_size:
+        # min_cluster_size = num_clients//(num_malicious_clients*2 + 1)
+        min_cluster_size = 3
     # logging.info(f'[hdbscan] {cos_list}')
     # for cl in cos_list:
     #     logging.info(f'[hdbscan] {cl}')
     # for lm in local_models:
     #     logging.info(f'[hdbscan] lm: {lm}')
-    logging.info(f'[Flame debug] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz" {num_malicious_clients}')
-
+    logging.info(f'[FLAME_V2] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz {num_malicious_clients}')
+    logging.info(f'{cos_list}')
+    # @TODO: Min_cluster_size should be a configurable parameter
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
 
 
@@ -202,7 +206,13 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
             #     print(local_models[benign_client[i]])
             #     print('<stop>')
             local_models[benign_client[i]] *= gamma
-    global_model = no_defense_vec_update([local_models[i].cpu().numpy() for i in benign_client], global_model, alpha)
+
+    # This line should be used for async aggregation only? For sync we can just do fed-avg?
+    if use_sync:
+        global_model = fed_avg_vec([local_models[i].cpu().numpy() for i in benign_client])
+    else:
+        global_model = no_defense_vec_update([local_models[i].cpu().numpy() for i in benign_client], global_model, alpha)
+    # 
     # Ignore noise for now
     # #add noise
     # for key, var in global_model.items():
@@ -211,7 +221,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1):
     #     temp = copy.deepcopy(var)
     #     temp = temp.normal_(mean=0,std=args.noise*clip_value)
     #     var += temp
-    logging.info(f'[FLAME_V2] cluster labels: {clusterer.labels_}')
+    logging.info(f'[FLAME_V2] cluster labels: {clusterer.labels_}, beneign clients: {benign_client}, has_byz: {num_malicious_clients}')
     return global_model, last_is_in_majority
 
 

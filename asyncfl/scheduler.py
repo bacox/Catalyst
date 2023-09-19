@@ -335,12 +335,14 @@ class Scheduler:
             # agg_weights = fed_avg(client_weights)
 
             # @TODO: Add the ability to use other algorithms than fed_avg
-            agg_weight_vec = fed_avg_vec(client_weights)
-            server.load_model_dict_vector(agg_weight_vec)
+            
+            agg_weight_vec = server.aggregate_sync(client_weights, byz_clients)
+            # agg_weight_vec = fed_avg_vec(client_weights)
+            # server.load_model_dict_vector(agg_weight_vec)
             # server.set_weights(agg_weights)
             wall_time += round_time
             interaction_events.append([0, wall_time, round_time, round_time])
-            server.incr_age()
+            # server.incr_age()
         
         return server_metrics, server.bft_telemetry, interaction_events
 

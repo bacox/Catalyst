@@ -1,4 +1,5 @@
 import logging
+from typing import List
 from asyncfl.flame import flame, flame_v2
 from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
 import math
@@ -9,14 +10,39 @@ class FlameServer(Server):
     """
     Implementation of Flame Defense
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True, hist_size = 3) -> None:
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True, hist_size = 3,min_cluster_size=3) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
         self.model_history_dict = {}
         self.model_full_history = []
         self.hist_size = hist_size
+        self.min_cluster_size = min_cluster_size
+
+    
+    def aggregate_sync(self, params: List[np.ndarray], byz_clients) -> np.ndarray:
+        # Used for synchronous aggregation
+        logging.info(f'Byzantine clients in this round: {byz_clients}')
+        logging.info(f"{'='*15}")
+        logging.info(f'BYZ PRESENT ? {any([x[1] for x in byz_clients])}')
+        logging.info(f"{'='*15}")
+
+        # Step 1: Transform the model weights in model differences (approximations to gradients).
+        server_weight_vec = self.get_model_dict_vector()
+        # params = [x - server_weight_vec for x in params]
+        # Step 2: Perform flame
+        logging.info(f'Users: {self.n}, byz: {self.f}')
+        args_dict = {'num_users': len(params), 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
+
+        updated_model_vec, accepted = flame_v2(params, self.get_model_dict_vector(), args_dict, 1, use_sync=True,min_cluster_size=self.min_cluster_size)
+
+        self.load_model_dict_vector(updated_model_vec)
+        self.incr_age()
+        # logging.info(updated_model_vec)
+        return updated_model_vec.copy()
+        # return super().aggregate_sync(params, byz_clients)
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        # Used for asynchronous aggregation
         logging.info(f'Flame dict_vector update of client {client_id}')
         # logging.info(f'[Flame Server] weight vector: {weight_vec}')
 
@@ -37,7 +63,9 @@ class FlameServer(Server):
                 args_dict = {'num_users': self.n, 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
                 alpha = self.learning_rate / float(max(gradient_age, 1))
                 # global_model, accepted = flame(local_models, update_params_list, self.get_model_dict_vector(), args_dict, alpha)
-                global_model, accepted = flame_v2(local_models, self.get_model_dict_vector(), args_dict, alpha)
+
+                # @TODO: Current problem: flame expects gradients, currently it gets model weigths?
+                global_model, accepted = flame_v2(local_models, self.get_model_dict_vector(), args_dict, alpha, min_cluster_size=self.min_cluster_size)
                 # print(global_model.shape)
                 self.load_model_dict_vector(global_model)
                 self.model_history.append(self.get_model_dict_vector())
