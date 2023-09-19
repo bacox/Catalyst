@@ -57,9 +57,12 @@ if __name__ == '__main__':
         ]
 
         servers = [
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 2}],
             [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 3}],
             [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 4}],
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 5}],
             [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 6}],
+            [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 7}],
             [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 8}],
 
         ]
@@ -156,6 +159,7 @@ if __name__ == '__main__':
     interaction_dfs = []
     for out in outputs2:
         name = out[1]['name']
+        min_cluster_size = int(out[1]['server_args']['min_cluster_size'])
         interaction_events = out[0][3]
         ie_df = pd.DataFrame(interaction_events, columns=['client_id', 'wall_time', 'min_ct', 'client_ct'])
         ie_df['alg'] = name
@@ -172,7 +176,7 @@ if __name__ == '__main__':
             byz_type = parts[-1].upper()
         local_df['f'] = f
         local_df['byz_type'] = byz_type
-        local_df_name = f'{parts[-2]}-{f}'
+        local_df_name = f'{parts[-2]}-f{f}-cs{min_cluster_size}'
         local_df['name'] = local_df_name
         ie_df['name'] = local_df_name
 
