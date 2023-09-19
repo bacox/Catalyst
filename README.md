@@ -10,7 +10,7 @@ Each client has a different compute speed than the other clients, depending on t
 This toy example simulates an asynchronous (federated) learning system.
 With some extensions, this should be able to run as a simulation on a GPU.
 
-Run `exp.ipynb` for results
+~~Run `exp.ipynb` for results~~
 
 Author: Bart Cox 13-02-2023
 
@@ -33,7 +33,7 @@ You just create a new model out of client weights.
 | Kardam | Yes    |
 |Telerig | Yes    |
 
-### Build
+### Build (not required)
 
 ```bash
 python3 -m pip install --upgrade build
