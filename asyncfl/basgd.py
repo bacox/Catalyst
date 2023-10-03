@@ -161,11 +161,11 @@ class BASGD(Server):
         vec_t = torch.from_numpy(weight_vec).to(self.device)
         self.buffers.receive(vec_t, client_id)
         if self.buffers.nonEmpty():
-            logging.info(f'Aggregate! {len(self.buffers)} buffers')
+            logging.info(f'Aggregate! {len(self.buffers)} buffers and {self.aggr_mode=}')
             self.optimizer.zero_grad()
             buffer_gradients = self.buffers.get_all_gradients()
             if self.aggr_mode == 'median':
-                print('agg Median')
+                logging.info('agg Median')
                 avg_weight_vec = median_aggregation(buffer_gradients)
             elif self.aggr_mode == 'trmean':
                 avg_weight_vec = trmean_aggregation(buffer_gradients, self.q)

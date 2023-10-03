@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from asyncfl.flame import flame_v3
+
 def clustering(stored_gradients, client_index, clients_per_round=10, stored_rounds=10):
     """
     Cluster the clients based on the stored gradients
@@ -69,32 +71,42 @@ if __name__ == '__main__':
     stored_gradients_major = [torch.ones(1, 2) for _  in range(5)]
     stored_gradients_1 = stored_gradients_minor + stored_gradients_major
     stored_gradients_2 = stored_gradients_major + stored_gradients_minor
-    print(stored_gradients_1)
-    majority, candidates, labels1 = clustering(stored_gradients_1, client_index, clients_per_round=4, stored_rounds=1)
-    print("clients in the largest cluster: ", majority)
-    print("candidates in this round: ", candidates)
+    stored_gradients_1_n = [x.squeeze().cpu().numpy() for x in stored_gradients_1]
+    stored_gradients_2_n = [x.squeeze().cpu().numpy() for x in stored_gradients_2]
+    clustered = flame_v3(stored_gradients_1_n[2:6], stored_gradients_1_n[0], 3)
+    print('input:')
+    [print(x) for x in stored_gradients_1_n[2:6]]
+    print('output')
+    [print(x) for x in clustered]
+    print('next')
+    clustered = flame_v3(stored_gradients_2_n, stored_gradients_2_n[0], 3)
+    [print(x) for x in clustered]
+    # print(stored_gradients_1)
+    # majority, candidates, labels1 = clustering(stored_gradients_1, client_index, clients_per_round=4, stored_rounds=1)
+    # print("clients in the largest cluster: ", majority)
+    # print("candidates in this round: ", candidates)
 
-    print(stored_gradients_2)
-    majority, candidates, labels2 = clustering(stored_gradients_2, client_index, clients_per_round=4, stored_rounds=1)
-    print("clients in the largest cluster: ", majority)
-    print("candidates in this round: ", candidates)
+    # print(stored_gradients_2)
+    # majority, candidates, labels2 = clustering(stored_gradients_2, client_index, clients_per_round=4, stored_rounds=1)
+    # print("clients in the largest cluster: ", majority)
+    # print("candidates in this round: ", candidates)
 
-    numpy_grads = np.concatenate(stored_gradients_1[-len(labels1):], axis=0)
-    df = pd.DataFrame(numpy_grads, columns=['x', 'y'])
-    df['labels'] = labels1
+    # numpy_grads = np.concatenate(stored_gradients_1[-len(labels1):], axis=0)
+    # df = pd.DataFrame(numpy_grads, columns=['x', 'y'])
+    # df['labels'] = labels1
 
-    plt.figure()
-    sns.scatterplot(data=df, x='x', y='y', hue='labels')
-    plt.title(f"stored_gradients_1")
-    plt.show()
+    # plt.figure()
+    # sns.scatterplot(data=df, x='x', y='y', hue='labels')
+    # plt.title(f"stored_gradients_1")
+    # plt.show()
 
 
-    numpy_grads = np.concatenate(stored_gradients_2[-len(labels2):], axis=0)
-    df = pd.DataFrame(numpy_grads, columns=['x', 'y'])
-    df['labels'] = labels2
+    # numpy_grads = np.concatenate(stored_gradients_2[-len(labels2):], axis=0)
+    # df = pd.DataFrame(numpy_grads, columns=['x', 'y'])
+    # df['labels'] = labels2
 
-    plt.figure()
-    sns.scatterplot(data=df, x='x', y='y', hue='labels')
-    plt.title(f"stored_gradients_2")
-    plt.show()
+    # plt.figure()
+    # sns.scatterplot(data=df, x='x', y='y', hue='labels')
+    # plt.title(f"stored_gradients_2")
+    # plt.show()
 

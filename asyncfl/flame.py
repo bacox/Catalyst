@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Tuple
 import numpy as np
 import torch
 import copy
@@ -106,6 +106,75 @@ def parameters_dict_to_vector(net_dict) -> torch.Tensor:
 #     sm_of_signs[sm_of_signs >= args.robustLR_threshold] = args.server_lr 
 #     return sm_of_signs.to(args.gpu)
 
+
+
+def flame_v3(weight_vectors: List[np.ndarray], global_weight_vec: np.ndarray, min_cluster_size :int = -1) -> List[Tuple[bool, np.ndarray]]:
+    # Make based on device
+    weight_vecs_t = [torch.from_numpy(x).cuda() for x in weight_vectors]
+    global_weight_vec_t = torch.from_numpy(global_weight_vec).cuda()
+    # logging.info('='*20)
+    # logging.info('Flame V3 Round')
+    # logging.info('='*20)
+    # logging.info(weight_vecs_t)
+
+    # Calculate cosine distance
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos_list=[]
+    for i in range(len(weight_vecs_t)):
+        cos_i = []
+        for j in range(len(weight_vecs_t)):
+            cos_ij = 1- cos(weight_vecs_t[i],weight_vecs_t[j])
+            cos_i.append(cos_ij.item())
+        cos_list.append(np.nan_to_num(cos_i))
+    if not min_cluster_size:
+        min_cluster_size = 3
+    # Cluster based on the cosine distance
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
+    logging.info(f'Clusterer labels: {clusterer.labels_}')
+
+    # Find value of biggest cluster
+    labels, counts = np.unique(clusterer.labels_, return_counts=True)
+    max_cluster = labels[np.argmax(counts)]
+
+    norm_list = np.array([])
+    clustered_clients = []
+
+    # If the majority are outlier, then...
+    if clusterer.labels_.max() < 0:
+        for i in range(len(weight_vecs_t)):
+            clustered_clients.append((True, weight_vecs_t[i]))
+            # benign_client.append(i)
+            # norm_list = np.append(norm_list,torch.norm(weight_vecs_t[i],p=2).item())
+    else:
+        # Mark clients if benign or not
+        for i in range(len(clusterer.labels_)):
+            if clusterer.labels_[i] == max_cluster:
+                clustered_clients.append((True, weight_vecs_t[i]))
+            else:
+                clustered_clients.append((False, weight_vecs_t[i]))
+            # norm_list = np.append(norm_list,torch.cdist(weight_vecs_t[i], global_weight_vec_t, p=2))
+            norm_list = np.append(norm_list,torch.norm(weight_vecs_t[i], p=2).cpu())
+
+                
+
+    clip_value = np.median(norm_list)
+    # print(f'Clip Value: {clip_value}')
+    for i in range(len(clustered_clients)):
+        # Check if client is used in clustering
+        if not clustered_clients[i]:
+            continue
+        # print(f'Norm: {norm_list[i]}')
+        gamma = clip_value/norm_list[i]
+        if gamma < 1:
+            # print(f'Gamma: {gamma}')
+            # logging.info(clustered_clients[i])
+            # logging.info(clustered_clients[i][1])
+            clustered_clients[i] = (clustered_clients[i][0], clustered_clients[i][1] * gamma)
+
+    clustered_clients_n = [(x,y.cpu().numpy()) for x,y in clustered_clients]
+    return clustered_clients_n
+
+
 def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_sync = False, min_cluster_size = -1):
     '''
     What are the local models?
@@ -130,6 +199,9 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_
 
     '''
     local_models = [torch.from_numpy(x).cuda() for x in local_models]
+    logging.info('='*20)
+    logging.info('Flame Round')
+    logging.info('='*20)
     logging.info(local_models)
     cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
     cos_list=[]
@@ -154,7 +226,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_
     # for lm in local_models:
     #     logging.info(f'[hdbscan] lm: {lm}')
     logging.info(f'[FLAME_V2] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz {num_malicious_clients}')
-    logging.info(f'{cos_list}')
+    # logging.info(f'{cos_list}')
     # @TODO: Min_cluster_size should be a configurable parameter
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
 

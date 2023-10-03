@@ -1,7 +1,7 @@
 import logging
 from typing import List
-from asyncfl.flame import flame, flame_v2
-from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
+from asyncfl.flame import flame, flame_v2, flame_v3
+from asyncfl.server import Server, get_update, no_defense_update, no_defense_vec_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
 
@@ -60,18 +60,35 @@ class FlameServer(Server):
             if len(self.model_full_history) >= max(self.f * 2 + 1, 2):
                 local_models = [item[0] for item in self.model_full_history[-self.hist_size:]]
                 update_params_list = [item[1] for item in self.model_full_history[-self.hist_size:]]
-                args_dict = {'num_users': self.n, 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
+                args_dict = {'num_users': self.n, 'frac': 1.0, 'malicious': 0.2, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
                 alpha = self.learning_rate / float(max(gradient_age, 1))
                 # global_model, accepted = flame(local_models, update_params_list, self.get_model_dict_vector(), args_dict, alpha)
 
                 # @TODO: Current problem: flame expects gradients, currently it gets model weigths?
-                global_model, accepted = flame_v2(local_models, self.get_model_dict_vector(), args_dict, alpha, min_cluster_size=self.min_cluster_size)
-                # print(global_model.shape)
-                self.load_model_dict_vector(global_model)
-                self.model_history.append(self.get_model_dict_vector())
-                self.incr_age()
+                logging.info(f'Has Byzantine ? {is_byzantine}')
+                clustered_tuples = flame_v3(local_models, self.get_model_dict_vector(), self.min_cluster_size)
+                logging.info(f'Has Byzantine ? {is_byzantine}')
+                # [logging.info(x) for x in clustered_tuples]
+                last_is_valid = clustered_tuples[-1][0]
+                if last_is_valid:
+                    logging.info(f'Updating server model with alpha: {alpha}')
+                    global_model = no_defense_vec_update([clustered_tuples[-1][1]], self.get_model_dict_vector(), alpha)
+                    self.load_model_dict_vector(global_model)
+                    self.model_history.append(self.get_model_dict_vector())
+                    self.incr_age()
+                else:
+                   self.model_full_history.pop()
+                # # logging.info(f'Clustered tuples: {clustered_tuples}')
 
-        return super().client_weight_dict_vec_update(client_id, weight_vec, gradient_age, is_byzantine)
+
+
+                # global_model, accepted = flame_v2(local_models, self.get_model_dict_vector(), args_dict, alpha, min_cluster_size=self.min_cluster_size)
+                # # print(global_model.shape)
+                # self.load_model_dict_vector(global_model)
+                # self.model_history.append(self.get_model_dict_vector())
+                # self.incr_age()
+        return self.get_model_dict_vector().copy()
+        # return super().client_weight_dict_vec_update(client_id, weight_vec, gradient_age, is_byzantine)
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0

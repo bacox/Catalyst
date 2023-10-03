@@ -23,6 +23,13 @@ def fed_async_avg(parameters, parameters_server, alpha = 0.5):
     #     new_params[name].data = new_params[name].data.long() / sum_size
     return new_params
 
+def fed_async_avg_np(update_vec: np.ndarray, server_vec: np.ndarray, alpha : float = 0.5) -> np.ndarray:
+    params = [update_vec, server_vec]
+    weigths = np.ones(len(params))
+    weigths[0] = alpha
+    weigths[1] = 1.0 - alpha
+    return np.average(params, axis=0, weights=weigths)
+
 class FedAsync(Server):
     """
     Staleness Aware SGD: Implmentation of the n-softsync sgd algorithms where lambda == num_workers
@@ -31,6 +38,19 @@ class FedAsync(Server):
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
         self.alpha = 1
+
+
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        logging.info(f'FedAsync server dict_vector update of client {client_id}')
+        staleness = 1 / float(self.age - gradient_age + 1)
+        alpha_t = self.alpha * staleness
+
+        alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
+
+        self.model_history.append(alpha_averaged)
+        self.load_model_dict_vector(alpha_averaged)
+        self.incr_age()
+        return alpha_averaged.copy()
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
