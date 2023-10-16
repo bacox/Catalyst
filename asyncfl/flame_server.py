@@ -21,16 +21,16 @@ class FlameServer(Server):
     
     def aggregate_sync(self, params: List[np.ndarray], byz_clients) -> np.ndarray:
         # Used for synchronous aggregation
-        logging.info(f'Byzantine clients in this round: {byz_clients}')
-        logging.info(f"{'='*15}")
-        logging.info(f'BYZ PRESENT ? {any([x[1] for x in byz_clients])}')
-        logging.info(f"{'='*15}")
+        # logging.info(f'Byzantine clients in this round: {byz_clients}')
+        # logging.info(f"{'='*15}")
+        # logging.info(f'BYZ PRESENT ? {any([x[1] for x in byz_clients])}')
+        # logging.info(f"{'='*15}")
 
         # Step 1: Transform the model weights in model differences (approximations to gradients).
         server_weight_vec = self.get_model_dict_vector()
         # params = [x - server_weight_vec for x in params]
         # Step 2: Perform flame
-        logging.info(f'Users: {self.n}, byz: {self.f}')
+        # logging.info(f'Users: {self.n}, byz: {self.f}')
         args_dict = {'num_users': len(params), 'frac': 1.0, 'malicious': 0.3, 'wrong_mal': 0, 'right_ben': 0, 'turn':0}
 
         updated_model_vec, accepted = flame_v2(params, self.get_model_dict_vector(), args_dict, 1, use_sync=True,min_cluster_size=self.min_cluster_size)
@@ -43,7 +43,7 @@ class FlameServer(Server):
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         # Used for asynchronous aggregation
-        logging.info(f'Flame dict_vector update of client {client_id}')
+        # logging.info(f'Flame dict_vector update of client {client_id}')
         # logging.info(f'[Flame Server] weight vector: {weight_vec}')
 
         if np.isnan(weight_vec).any():
@@ -65,13 +65,13 @@ class FlameServer(Server):
                 # global_model, accepted = flame(local_models, update_params_list, self.get_model_dict_vector(), args_dict, alpha)
 
                 # @TODO: Current problem: flame expects gradients, currently it gets model weigths?
-                logging.info(f'Has Byzantine ? {is_byzantine}')
+                # logging.info(f'Has Byzantine ? {is_byzantine}')
                 clustered_tuples = flame_v3(local_models, self.get_model_dict_vector(), self.min_cluster_size)
-                logging.info(f'Has Byzantine ? {is_byzantine}')
+                # logging.info(f'Has Byzantine ? {is_byzantine}')
                 # [logging.info(x) for x in clustered_tuples]
                 last_is_valid = clustered_tuples[-1][0]
                 if last_is_valid:
-                    logging.info(f'Updating server model with alpha: {alpha}')
+                    # logging.info(f'Updating server model with alpha: {alpha}')
                     global_model = no_defense_vec_update([clustered_tuples[-1][1]], self.get_model_dict_vector(), alpha)
                     self.load_model_dict_vector(global_model)
                     self.model_history.append(self.get_model_dict_vector())

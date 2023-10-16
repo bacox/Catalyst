@@ -37,8 +37,8 @@ class FedAsync(Server):
     def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
+        # self.alpha = self.learning_rate
         self.alpha = 1
-
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         logging.info(f'FedAsync server dict_vector update of client {client_id}')

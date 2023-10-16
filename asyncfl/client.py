@@ -121,7 +121,7 @@ class Client:
 
     def train(self, num_batches = -1, local_epochs = 1):
         # @TODO: Increment local_age
-        logging.info(f'[Client {self.pid}] training')
+        # logging.debug(f'[Client {self.pid}] training')
         self.w_flat = flatten(self.network)
 
         prev_weights = self.w_flat.detach().clone()

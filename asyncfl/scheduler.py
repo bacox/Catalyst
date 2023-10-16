@@ -1,7 +1,10 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
+from datetime import datetime
 import inspect
 import json
 from multiprocessing import Lock, Pool, current_process, RLock, Process
+import multiprocessing
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
 import traceback
@@ -20,6 +23,7 @@ import time
 from threading import Thread
 import logging
 import asyncio
+from .kardam import Kardam
 
 def dict_convert_class_to_strings(dictionary: dict):
     d = copy.deepcopy(dictionary)
@@ -96,11 +100,12 @@ class Scheduler:
         logging.info('Creating server')
         self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, **config["server_args"])
 
-        def create_client(self, pid, c_ct, client_class, client_args):
+        def create_client(self, pid, c_ct, client_class, client_args) -> int:
             node_id = f"c_{pid}"
             # print(client_class)
             self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
             self.compute_times[pid] = c_ct
+            return pid
 
         def create_client_aux(self, pid, c_args):
             p = Thread(target=create_client, args=(self, pid, *c_args), daemon=False)
@@ -110,12 +115,30 @@ class Scheduler:
 
         logging.info('Creating clients')
         loading_processes = []
-        for pid, (c_ct, client_class, client_args) in enumerate(client_data):
-            # print(pid, c_ct, client_class, client_args)
-            node_id = f"c_{pid}"
-            loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            try:
+                for pid, (c_ct, client_class, client_args) in enumerate(client_data):
+                    # print(pid, c_ct, client_class, client_args)
+                    node_id = f"c_{pid}"
+                    # loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
+                    loading_processes.append(executor.submit(create_client, self, pid, c_ct, client_class, client_args))
 
-        [x.join() for x in loading_processes]
+                for idx, future in enumerate(as_completed(loading_processes)):
+                    # get the downloaded url data
+                    pid = future.result()
+                    logging.debug(f'{num_clients - idx} clients to be created')
+                logging.info('Finished creating clients')
+            except KeyboardInterrupt:
+                executor.shutdown(wait=False)
+                raise KeyboardInterrupt('KeyboardInterrupt 1') # Or re-raise if not in generator
+                
+
+        # for pid, (c_ct, client_class, client_args) in enumerate(client_data):
+        #     # print(pid, c_ct, client_class, client_args)
+        #     node_id = f"c_{pid}"
+        #     loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
+
+        # [x.join() for x in loading_processes]
 
     def get_server(self):
         return self.entities["server"]
@@ -159,51 +182,6 @@ class Scheduler:
             clients[rc["_id"]] = rc
         return sequence, events
     
-    def compute_interaction_sequence(self, ct_data, num_rounds):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        def create_mock_client(_id, ct):
-            return {
-                "_id": _id,
-                "ct": ct,
-                "ct_left": ct,
-            }
-
-        clients = [create_mock_client(idx, c_ct) for (idx, c_ct) in ct_data.items()]
-        # Make sure to sort clients! It is not ordered!
-        clients = sorted(clients, key=lambda x: x['_id'])
-        # print(f'Clients:')
-        # [print(x) for x in clients]
-        wall_time = 0
-        events = []
-        sequence = []
-        for _round in range(num_rounds):
-            rc = min(clients, key=lambda x: x["ct_left"])
-            # Find client the finishes first
-            min_ct = rc["ct_left"]
-            sequence.append(rc["_id"])
-
-            # Update the time for all the clients with the elapsed time of min_ct
-            wall_time += min_ct
-            # print(wall_time)
-            events.append([rc['_id'], wall_time, min_ct, rc['ct']])
-            for c in clients:
-                c["ct_left"] -= min_ct
-
-            # Perform client server interaction between server and min_ct
-            # Reset compute time of min_ct
-            rc["ct_left"] = rc["ct"]
-            clients[rc["_id"]] = rc
-        # print(f'clients{clients}')
-        # print(f'ct_data: {ct_data}')
-
-        # print(f'events {events}')
-        # [print(x) for x in events]
-        
-
-        return sequence, events
     
     
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
@@ -255,11 +233,17 @@ class Scheduler:
         logging.info('Running async loop')
         server_metrics = []
         model_age_stats = []
+        last_five_loses = []
         for update_id, client_id in enumerate(
             pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
         ):
             if update_id % test_frequency == 0:
                 out = server.evaluate_accuracy()
+                last_five_loses.append(out[1])
+                last_five_loses = last_five_loses[-5:]
+                if np.isnan(last_five_loses).all():
+                    logging.info('Server is stopping because of too many successive NaN values during server testing')
+                    break
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
                 logging.info(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
@@ -270,8 +254,10 @@ class Scheduler:
             
             is_byzantine = client.is_byzantine
             client_age = client.local_age
-
-            agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
+            if type(server) == Kardam:
+                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
+            else:
+                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
             client.load_model_dict_vector(agg_weights)
             client.local_age = server.age
 
@@ -347,201 +333,7 @@ class Scheduler:
         return server_metrics, server.bft_telemetry, interaction_events
 
 
-    def run_sync_tasks(
-        self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0
-    ):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        """To run Synchronous Federated Learning.
 
-        Args:
-            num_rounds (_type_): _description_
-            ct_clients (list, optional): _description_. Defaults to [].
-            progress_disabled (bool, optional): _description_. Defaults to False.
-            position (int, optional): _description_. Defaults to 0.
-            add_descr (str, optional): _description_. Defaults to "".
-            client_participation (float, optional): _description_. Defaults to 1.0.
-
-        Returns:
-            _type_: _description_
-        """
-        clients: List[Client] = self.get_clients()
-        server: Server = self.get_server()
-
-        # def train_client(self, client: Client, local_id, num_batches=-1):
-        #     client.move_to_gpu()
-        #     client.train(num_batches=num_batches)
-        #     c_gradients, c_buffers, lipschitz, age, is_byzantine = client.get_gradient_vectors()
-        #     self.gradient_responses[local_id] = c_gradients
-        #     self.buffer_responses[local_id] = c_buffers
-        #     client.move_to_cpu()
-
-        initial_weights = flatten(server.network)
-        model_age = server.get_age()
-        for c in clients:
-            unflatten(c.network, initial_weights.detach().clone())
-
-        server_metrics = []
-        update_counter = 0
-        for idx_, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None)):
-            # print(f'Round {update_id}')
-            num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
-            selected_clients = np.random.choice(clients, num_clients, replace=False)  # type: ignore
-            # print(f'Client participation: {num_clients}')
-            if update_id % 5 == 0:
-                out = server.evaluate_accuracy()
-                server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-            gradients = []
-            buffers = []
-
-            update_counter += len(clients)
-            training_processes = []
-            client: Any = None
-            lipschitz = 0
-            client_convergence = 0
-            is_byzantine = False
-            for local_id, client in enumerate(selected_clients):
-                client.move_to_gpu()
-                client.train(num_batches=1)
-                c_gradients, c_buffers, lipschitz, client_convergence, age, is_byzantine = client.get_gradient_vectors()
-                gradients.append(c_gradients)
-                buffers.append(c_buffers)
-                client.move_to_cpu()
-            # [x.join() for x in training_processes]
-
-            # agv_gradient = np.mean(self.gradient_responses, axis=0)
-            agv_gradient = np.mean(gradients, axis=0)
-            # if not any(self.buffer_responses):
-            #     avg_buffers = []
-            # else:
-            if buffers[0] == []:
-                avg_buffers = []
-            else:
-                stacked = torch.stack(buffers)
-                #     # stacked = torch.stack(self.buffer_responses)
-                avg_buffers = torch.mean(stacked, dim=0)
-            unflatten_b(server.network, avg_buffers)
-            new_model_weights_vector = server.client_update(client.get_pid(), agv_gradient, lipschitz, client_convergence, server.get_age(), is_byzantine)
-            # new_model_weights_vector = server.get_model_weights()
-            for client in clients:
-                client.move_to_gpu()
-                client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
-                client.move_to_cpu()
-
-                # unflatten_b(server.network, c_buffers)
-                # new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, age)
-                # client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
-                # client.move_to_cpu()
-        return server_metrics, [], server.bft_telemetry
-
-    def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        """
-        To run Asynchronous Federated Learning
-        @TODO: Put dict of interaction sequence as argument
-        @TODO: Save participation statistics of the clients and plot this in a graph.
-        @TODO: Keep track of the model staleness (age), and plot this in a graph
-        @TODO: Create non-IID scenario
-        @TODO: Make sure that the server loads the full test set and the clients the splitted train set
-        @TODO: Show that non-IID and skewed compute time are bad for the accuracy
-        @TODO: Break BASGD with a frequency attack
-        """
-        if not ct_clients:
-            ct_clients = [1] * len(self.get_clients())
-
-        interaction_sequence = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
-
-        # c_ids = list(self.compute_times.keys())
-        # random.shuffle(c_ids)
-        interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
-            :num_rounds
-        ]
-
-        # seqs = [self.compute_interaction_sequence(
-        #     self.compute_times, num_rounds+1) for x in range(10)]
-        clients: List[Client] = self.get_clients()
-        server: Server = self.get_server()
-
-        initial_weights = flatten(server.network)
-        model_age = server.get_age()
-        for c in clients:
-            unflatten(c.network, initial_weights.detach().clone())
-
-        # To keep track of the metrics
-        server_metrics = []
-        model_age_stats = []
-
-        use_weight_avg = False
-
-        # Play all the server interactions
-        for update_id, client_id in enumerate(
-            pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
-        ):
-            if update_id % 25 == 0:
-                out = server.evaluate_accuracy()
-                server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-                logging.info(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-            client: Client = clients[client_id]
-
-            client.move_to_gpu()
-            client.train(num_batches=1)
-
-            if use_weight_avg:
-                server.set_weights(client.network.state_dict())
-            else:
-                c_gradients, c_buffers, lipschitz, client_convergence, age, is_byzantine = client.get_gradient_vectors()
-                server.incr_age()
-                gradient_age = server.get_age() - age
-                model_age_stats.append([update_id, client.pid, gradient_age])
-                unflatten_b(server.network, c_buffers)
-                new_model_weights_vector = server.client_update(client.get_pid(), c_gradients, lipschitz, client_convergence, gradient_age, is_byzantine)
-                client.set_weight_vectors(new_model_weights_vector.cpu().numpy(), server.get_age())
-            client.move_to_cpu()
-
-        return server_metrics, model_age_stats, server.bft_telemetry
-
-        # Plot data
-
-    def run_with_tasks_old(self):
-        """
-        Deprecated function
-        """
-        raise DeprecationWarning(f"Function '{__name__}.{inspect.currentframe().f_code.co_name}' is deprecated") # type: ignore
-        # Create task list
-        tasks = []
-        task: Task = Task(self.get_clients()[0], Client.get_pid)
-        task()
-        t2 = Task(self.get_clients()[-1], Client.print_pid_and_var, "hello world")
-        t2()
-        t3 = Task(self.get_clients()[0], Client.train, self.get_clients()[0].get_weights())
-        t_c1_join = Task(self.get_server(), Server.client_join, self.get_clients()[0])
-        t_c1_train = Task(self.get_clients()[0], Client.train)
-        t_c1_update = Task(self.get_server(), Server.client_update, self.get_clients()[0])
-        tasks = [t_c1_join] + [t_c1_train, t_c1_update] * 1000
-        for t in tasks:
-            t()
-        for c in self.server.clients:
-            self.server.client_join(c)
-        # Run 5 times
-        for i in range(5):
-            print(f"Running iter {i}")
-        return
-        # current_model = self.server.client_join(self.clients[0])
-        # self.clients
-        # Get initial model weights
-        current_weights = self.server.get_model_weights()
-        # while True:
-        grad = self.clients[0].train(current_weights)
-        print(grad)
-        # for c in self.clients:
-        #     c.train()
 
     @staticmethod
     def run_util(cfg_params):
@@ -606,9 +398,22 @@ class Scheduler:
             logging.error(traceback.format_exc())
 
     @staticmethod
-    def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path, None] = None, clear_file=False, multi_thread = True):
+    def filter_executed_exps(configs: List[dict], data_file: Union[str, Path]):
+        print('Running mising experiments:')
+        with open(data_file, 'r') as f:
+            completed_runs = json.load(f)
+            keys = [x[1]['exp_id'] for x in completed_runs]
+            configs = [x for x in configs if x['exp_id'] not in keys]
+            # @TODO: Append to output instead of overwriting
+        return configs
+
+    @staticmethod
+    def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path] = 'data.json', clear_file=False, multi_thread = True, autocomplete = False):
+        logging.basicConfig(format='%(asctime)s.%(msecs)-3d - %(levelname)-8s - %(processName)-2s :  %(message)s', level=logging.DEBUG, filename='debug.log', datefmt="%H:%M:%S")
+        logging.info(f'<== Starting execution of {len(list_of_configs)} experiments at {datetime.now().strftime("%d/%m/%Y %H:%M:%S")} ==>')
+        if autocomplete:
+            list_of_configs = Scheduler.filter_executed_exps(list_of_configs, outfile)
         pool_size = min(pool_size, len(list_of_configs))
-        logging.basicConfig(format='%(asctime)s - %(levelname)s:%(message)s', level=logging.DEBUG, filename='debug.log')
         # install_mp_handler()
         if clear_file and outfile and Path(outfile).exists():
             logging.info(f'Clearing existing output file "{Path(outfile).name}"')
@@ -620,24 +425,29 @@ class Scheduler:
         cfg_args = [(x, outfile, lock) for x in list_of_configs]
         logging.info(f"Pool size = {pool_size}")
         logging.info(f'Run multi-threaded ? {multi_thread}')
+
+        def init_func(args):
+            multiprocessing.current_process().name = multiprocessing.current_process().name.replace('ForkPoolWorker-', 'W')
+            tqdm.set_lock(args)
         if pool_size > 1 and multi_thread:
-            pool = Pool(pool_size, initializer=tqdm.set_lock, initargs=(tqdm.get_lock(),))
-            
-            # with logging_redirect_tqdm():
-            # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks?
-            outputs = [
-                x
-                for x in tqdm(
-                    pool.imap_unordered(Scheduler.run_util, cfg_args),
-                    total=len(list_of_configs),
-                    position=0,
-                    leave=None,
-                    desc="Total",
-                )
-                if x
-            ]
+            with Pool(pool_size, initializer=init_func, initargs=(tqdm.get_lock(),)) as pool:
+
+                # @TODO: Make sure the memory is dealocated when the task is finished. Currently is accumulating memory with lots of tasks?
+                outputs = [
+                    x
+                    for x in tqdm(
+                        pool.imap_unordered(Scheduler.run_util, cfg_args),
+                        total=len(list_of_configs),
+                        position=0,
+                        leave=None,
+                        desc="Total",
+                    )
+                    if x
+                ]
         else:
             print('Running single-threaded')
             outputs = [Scheduler.run_util(x) for x in cfg_args]
         print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        logging.info(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+
         return outputs

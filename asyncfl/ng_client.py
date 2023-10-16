@@ -12,7 +12,7 @@ class NGClient(Client):
         self.is_byzantine = True
 
     def train(self, num_batches=-1):
-        logging.info(f'[Client {self.pid}] Running NG_Client training loop, magnitude={self.magnitude}')
+        # logging.info(f'[Client {self.pid}] Running NG_Client training loop, magnitude={self.magnitude}')
         super().train(num_batches)
         weight_vector = flatten(self.network)
         inversed_weights = weight_vector * (self.g_flat * -1.0 * self.magnitude)

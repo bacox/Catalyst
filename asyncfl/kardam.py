@@ -1,10 +1,13 @@
 from collections import Counter
+from typing import List
+from asyncfl.fedAsync_server import fed_async_avg_np
 from asyncfl.network import flatten
-from asyncfl.server import Server
+from asyncfl.server import Server, no_defense_vec_update
+from torch import linalg as LA
 import math
 import numpy as np
 import torch
-
+import logging
 from asyncfl.util import compute_lipschitz_simple
 # class Damper:
 #     """Simple class for Kardam's staleness-aware dampening component"""
@@ -37,6 +40,34 @@ def dampening_factor(tau, alpha = 0.2, active=True):
     else:
         return 1
 
+def compute_lipschitz_simple_np(current_grad_t:np.ndarray, previous_grad_t:np.ndarray, model_vec_t: np.ndarray, prev_model_vec_t: np.ndarray) -> torch.Tensor:
+    current_grad = torch.from_numpy(current_grad_t)
+    previous_grad = torch.from_numpy(previous_grad_t)
+    model_vec = torch.from_numpy(model_vec_t)
+    prev_model_vec = torch.from_numpy(prev_model_vec_t)
+
+    if  torch.sum(previous_grad):
+        num = LA.vector_norm(current_grad - previous_grad)
+        den = LA.vector_norm(model_vec - prev_model_vec)
+        lipschitz: torch.Tensor = num/np.maximum(den.numpy(),0.0001)
+    else:
+        num = LA.vector_norm(current_grad)
+        den = LA.vector_norm(model_vec)
+        lipschitz: torch.Tensor = num/den
+    return lipschitz.to('cpu')
+
+def approx_lipschitz(model_vec: torch.Tensor, prev_model_vec: torch.Tensor, prev_prev_model_vec: torch.Tensor) -> np.ndarray:
+    prev_grad = prev_prev_model_vec - prev_model_vec
+    current_grad = prev_model_vec - model_vec
+    if  torch.sum(prev_grad):
+        num = LA.vector_norm(current_grad - prev_grad)
+        den = LA.vector_norm(model_vec - prev_model_vec)
+        lipschitz = num/np.maximum(den.numpy(),0.0001)
+    else:
+        num = LA.vector_norm(current_grad)
+        den = LA.vector_norm(model_vec)
+        lipschitz = num/den
+    return lipschitz
 
 class Kardam(Server):
     """
@@ -49,8 +80,75 @@ class Kardam(Server):
         self.damp_alpha = damp_alpha
         self.cons_rejections = 0
         self.hack = True
-        self.grad_history = {}
+        self.grad_history: List[np.ndarray] = []
         self.client_history = []
+        self.alpha = 1
+
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool, client_lipschitz: np.ndarray) -> np.ndarray:
+        # logging.info(f'Using the KARDAM update function')
+        # logging.info(f'Client [{client_id}] :: lipschitz --> {client_lipschitz=}')
+        self.lips[client_id] = client_lipschitz
+        prev_model = self.model_history[gradient_age]
+        approx_grad = weight_vec - prev_model
+
+        # logging.info(f'Length: {len(self.model_history)=} && {gradient_age=}')
+        if len(self.grad_history):
+            prev_gradients = self.grad_history[gradient_age-1]
+        else:
+            prev_gradients = np.zeros_like(approx_grad)
+        current_model = self.get_model_dict_vector()
+        model_staleness = (self.get_age() + 1) - gradient_age
+        grads_dampened = approx_grad * dampening_factor(model_staleness, self.damp_alpha)
+        # self.k_pt = compute_lipschitz_simple_np(grads_dampened, prev_gradients, current_model, prev_model)
+        self.k_pt = client_lipschitz
+        
+        # self.prune_grad_history(size=4)
+        
+        self.grad_history.append(approx_grad)
+        if self.lipschitz_check(self.k_pt, self.hack):
+            if self.frequency_check(client_id):
+
+
+                # logging.info(f'FedAsync server dict_vector update of client {client_id}')
+                staleness = 1 / float(self.age - gradient_age + 1)
+                alpha_t = self.alpha * staleness
+
+                alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
+
+                self.model_history.append(alpha_averaged)
+                self.load_model_dict_vector(alpha_averaged)
+                self.incr_age()
+                return alpha_averaged.copy()
+            
+                # Accept
+                alpha = dampening_factor(model_staleness, self.damp_alpha)
+                staleness = 1 / float(self.age - gradient_age + 1)
+                alpha_t = self.learning_rate * staleness
+
+                logging.info(f'[Byz={is_byzantine}\t\t Accept: True] \t\t{self.k_pt=} \t {client_lipschitz=} \t :: Alpha --> {alpha_t=}')
+                # logging.info(f'Kardam accepts this update from byzantine ? {is_byzantine=} and {self.k_pt=}')
+                # for g in self.optimizer.param_groups:
+                #     g['lr'] = alpha_t
+                # self.aggregate(approx_grad)
+                logging.info(f'{approx_grad=}')
+                updated_model_vec = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha_t)
+                self.model_history.append(updated_model_vec)
+                self.load_model_dict_vector(updated_model_vec)
+                self.incr_age()
+                # logging.info(updated_model_vec)
+                return updated_model_vec.copy()
+            else:
+                # Reject frequency
+                # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
+
+                # logging.info(f'Kardam rejects this update from byzantine ? {is_byzantine=} because of frequency and {self.k_pt=}')
+                return self.get_model_dict_vector()
+        else:
+            # Reject byzantine
+            # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
+
+            # logging.info(f'Kardam rejects this update from byzantine ? {is_byzantine=} because of detection and {self.k_pt=}')
+            return self.get_model_dict_vector()
 
     
     def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
@@ -137,6 +235,7 @@ class Kardam(Server):
 
         # if the dictionary is empty (i.e. this is the first epoch) then set to valid
         if not self.lips:
+            # logging.info('Kardam empty lips accept')
             return True
         else:
             # get the set of all local lipschitz coefficients
@@ -149,9 +248,10 @@ class Kardam(Server):
         k_t = np.percentile(k_p, ((self.n-self.f)/float(self.n))*100)
         
         # print(f"cand = {k_pt}, percentile = {k_t}")
-        
+        # logging.info(f'{k_pt=} <= {k_t=} \t\t{k_p=}')
         if k_pt <= k_t:
             self.cons_rejections = 0
+            # logging.info('Kardam normal accept')
             return True
 
         # Successive rejection condition, 
@@ -159,7 +259,7 @@ class Kardam(Server):
         elif self.cons_rejections >= len(self.lips) and hack == True:
             self.cons_rejections = 0
             # print('Accept due to hack!!!')
-            # self.logger.debug("Too many rejections. Accepting Gradient")
+            # logging.info(f"{'#'*15}Too many rejections. Accepting Gradient")
             return True
         else:
             self.cons_rejections += 1

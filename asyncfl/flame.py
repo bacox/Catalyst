@@ -130,7 +130,7 @@ def flame_v3(weight_vectors: List[np.ndarray], global_weight_vec: np.ndarray, mi
         min_cluster_size = 3
     # Cluster based on the cosine distance
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
-    logging.info(f'Clusterer labels: {clusterer.labels_}')
+    # logging.info(f'Clusterer labels: {clusterer.labels_}')
 
     # Find value of biggest cluster
     labels, counts = np.unique(clusterer.labels_, return_counts=True)
@@ -225,7 +225,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_
     #     logging.info(f'[hdbscan] {cl}')
     # for lm in local_models:
     #     logging.info(f'[hdbscan] lm: {lm}')
-    logging.info(f'[FLAME_V2] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz {num_malicious_clients}')
+    # logging.info(f'[FLAME_V2] num_clients: {num_clients}, min_cluster_size: {min_cluster_size}, byz {num_malicious_clients}')
     # logging.info(f'{cos_list}')
     # @TODO: Min_cluster_size should be a configurable parameter
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
@@ -293,7 +293,7 @@ def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_
     #     temp = copy.deepcopy(var)
     #     temp = temp.normal_(mean=0,std=args.noise*clip_value)
     #     var += temp
-    logging.info(f'[FLAME_V2] cluster labels: {clusterer.labels_}, beneign clients: {benign_client}, has_byz: {num_malicious_clients}')
+    # logging.info(f'[FLAME_V2] cluster labels: {clusterer.labels_}, beneign clients: {benign_client}, has_byz: {num_malicious_clients}')
     return global_model, last_is_in_majority
 
 
