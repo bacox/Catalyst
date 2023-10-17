@@ -137,7 +137,8 @@ class Kardam(Server):
 
     
     def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
-        raise NotImplementedError(f"Function '{inspect.currentframe().f_code.co_name}' is not implemented yet in {__class__.__name__}")
+        raise DeprecationWarning(f"Function '{inspect.currentframe().f_code.co_name}' is deprecated")
+
         self.lips[_client_id] = client_lipschitz.numpy()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)

@@ -18,11 +18,11 @@ plt.ioff()
 if __name__ == '__main__':
     args = cli_options()
 
-    print('Exp 36: Flame asynchronous version')
+    print('Exp 37: Kardam Options')
 
     (data_path := Path('.data')).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path('graphs')).mkdir(exist_ok=True, parents=True)
-    exp_name = 'exp36_flame_async'
+    exp_name = 'exp37_kardam_options'
     data_file = data_path / f'{exp_name}.json'
 
 
@@ -58,7 +58,7 @@ if __name__ == '__main__':
         num_rounds = 200
         idx = 1
         repetitions = 3
-        exp_id = 169
+        exp_id = 0
         # server_lr = 0.005
         server_lr = 0.1
         # num_clients = 50
@@ -82,45 +82,7 @@ if __name__ == '__main__':
         
         servers = [
             [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
-            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
-            # # [AFL.Kardam,{'learning_rate': 0.01, 'damp_alpha': 0.1,}],
-            # # [AFL.Kardam,{'learning_rate': 0.005, 'damp_alpha': 0.1,}],
-            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.02,}],
-            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.05,}],
-            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.1,}],
-            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.2,}],
-            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 2}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
-            # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
-            # [AFL.FlameServer,{'learning_rate': 0.05, 'hist_size': 11, 'min_cluster_size': 11}],
-            # [AFL.FlameServer,{'learning_rate': 0.025, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.01, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.005, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.001, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.2, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.3, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.4, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # # [AFL.FlameServer,{'learning_rate': 0.5, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 4}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 5}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 6}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 7}],
-            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 8}],
-
-            # # [AFL.SaSGD,{'learning_rate': server_lr}],
-            # # [AFL.Server,{'learning_rate': server_lr}],
-            # # [AFL.FedAsync,{'learning_rate': 0.5},],
-            # [AFL.FedAsync,{'learning_rate': 0.1},],
-            # [AFL.FedAsync,{'learning_rate': 0.05},],
-            # # [AFL.FedAsync,{'learning_rate': 0.01},],
-            # # # [AFL.FedWait,{'learning_rate': server_lr}],
-            # # # [AFL.Server,{'learning_rate': server_lr}],
-            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3}],
-            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3, 'aggr_mode': 'trmean'}],
-            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
-            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
-
+            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': True}],
         ]
         f0_keys = []
 
@@ -255,13 +217,11 @@ if __name__ == '__main__':
         if f:
             byz_type = parts[-1].upper()
         local_df['f'] = f
-        local_df['kardam_damp'] = kardam_damp
-        local_df['server_lr'] = server_lr
         local_df['byz_type'] = byz_type
         local_df['num_clients'] = num_clients
         local_df['alg_name'] = parts[-2]
-        # local_df_name = f'{parts[-2]}-f{f}-{server_lr}-{kardam_damp}'
-        local_df_name = f'{server_lr}-{kardam_damp}'
+        local_df['use_lipschitz_server_approx'] = cfg_data['server_args']['use_lipschitz_server_approx']
+        local_df_name = f'{parts[-2]}-f{f}-{server_lr}-{kardam_damp}'
         # print(local_df_name, parts)
         local_df['name'] = local_df_name
         ie_df['name'] = local_df_name
@@ -294,9 +254,8 @@ if __name__ == '__main__':
     graph_file = graphs_path / f'{exp_name}_general_byz.png'
     print(f'Generating plot: {graph_file}')
     local_df = server_df[server_df['f'] > 0]
-    print(local_df)
     plt.figure(figsize=fig_size)
-    g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='name', aspect=2)
+    g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
     g.map(sns.lineplot, "round", "accuracy")
     g.add_legend()
     plt.savefig(graph_file)
@@ -305,12 +264,13 @@ if __name__ == '__main__':
     print(f'Generating plot: {graph_file}')
     local_df = server_df[server_df['f'] == 0]
     plt.figure(figsize=fig_size)
-    g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='name', aspect=2)
+    g = sns.FacetGrid(local_df, col="name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
     g.map(sns.lineplot, "round", "accuracy")
     g.add_legend()
     plt.savefig(graph_file)
+    last_round = server_df.max()['round']
 
-    # print(local_df)
+
     exit()
 
     local_df = server_df[server_df['num_clients'] == 100]
