@@ -186,7 +186,7 @@ class Scheduler:
     
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
-    def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
+    def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, server_name="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
         interaction_sequence, interaction_events = [], []
         if fl_type != 'sync':
             logging.info('Running async')
@@ -221,19 +221,20 @@ class Scheduler:
 
         # Iterate rounds
         if fl_type == 'sync':
-            server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, add_descr, batch_limit = batch_limit, test_frequency=test_frequency)
+            server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
         else:
-            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, add_descr, batch_limit=batch_limit, test_frequency=test_frequency)
+            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
 
 
         return server_metrics, model_age_stats, bft_telemetry, interaction_events
 
-    def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, add_descr, batch_limit=-1, test_frequency=25):
+    def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, server_name, batch_limit=-1, test_frequency=25):
         # Play all the server interactions
         logging.info('Running async loop')
         server_metrics = []
         model_age_stats = []
         last_five_loses = []
+        add_descr = f"[W{position}: {server_name}] "
         for update_id, client_id in enumerate(
             pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
         ):
@@ -242,11 +243,11 @@ class Scheduler:
                 last_five_loses.append(out[1])
                 last_five_loses = last_five_loses[-5:]
                 if np.isnan(last_five_loses).all():
-                    logging.info('Server is stopping because of too many successive NaN values during server testing')
+                    logging.warning('Server is stopping because of too many successive NaN values during server testing')
                     break
                 server_metrics.append([update_id, out[0], out[1]])
                 pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-                logging.info(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+                logging.info(f"[R {update_id:3d} {server_name}] Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
             
             client: Client = clients[client_id]
             client.move_to_gpu()
@@ -270,15 +271,16 @@ class Scheduler:
 
         return server_metrics, model_age_stats, server.bft_telemetry
 
-    def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, add_descr='', batch_limit = -1, test_frequency=5):
+    def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
         server_metrics = []
         update_counter = 0 # Keep track of the number of total updates from clients
         agg_weights = server.get_model_weights()
         agg_weight_vec: np.ndarray = server.get_model_dict_vector()
+        add_descr = f"[W{position}: {server_name}] "
         interaction_events = []
         wall_time = 0
         num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
-
+    
         num_rounds = num_rounds // num_clients
         for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None, total=num_rounds*num_clients)):
             # Client selection
@@ -366,7 +368,7 @@ class Scheduler:
                     *sched.execute(
                         num_rounds,
                         position=worker_id,
-                        add_descr=f"[W{worker_id}: {safe_cfg['server']}] ",
+                        server_name=f"{safe_cfg['server']}",
                         client_participation=cfg["client_participartion"],
                         fl_type=cfg["aggregation_type"],
                         batch_limit=cfg["client_batch_size"],

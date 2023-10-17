@@ -109,34 +109,35 @@ class Kardam(Server):
             if self.frequency_check(client_id):
 
 
-                # logging.info(f'FedAsync server dict_vector update of client {client_id}')
-                staleness = 1 / float(self.age - gradient_age + 1)
-                alpha_t = self.alpha * staleness
+                # # logging.info(f'FedAsync server dict_vector update of client {client_id}')
+                # staleness = 1 / float(self.age - gradient_age + 1)
+                # alpha_t = self.alpha * staleness
 
-                alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
+                # alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
 
-                self.model_history.append(alpha_averaged)
-                self.load_model_dict_vector(alpha_averaged)
-                self.incr_age()
-                return alpha_averaged.copy()
+                # self.model_history.append(alpha_averaged)
+                # self.load_model_dict_vector(alpha_averaged)
+                # self.incr_age()
+                # return alpha_averaged.copy()
             
                 # Accept
                 alpha = dampening_factor(model_staleness, self.damp_alpha)
-                staleness = 1 / float(self.age - gradient_age + 1)
-                alpha_t = self.learning_rate * staleness
+                # staleness = 1 / float(self.age - gradient_age + 1)
+                # alpha_t = self.learning_rate * staleness
 
-                logging.info(f'[Byz={is_byzantine}\t\t Accept: True] \t\t{self.k_pt=} \t {client_lipschitz=} \t :: Alpha --> {alpha_t=}')
+                logging.info(f'[Byz={is_byzantine}\t\t Accept: True] \t\t{self.k_pt=} \t {client_lipschitz=} \t :: Alpha --> {alpha=}')
                 # logging.info(f'Kardam accepts this update from byzantine ? {is_byzantine=} and {self.k_pt=}')
                 # for g in self.optimizer.param_groups:
-                #     g['lr'] = alpha_t
+                #     g['lr'] = alpha
                 # self.aggregate(approx_grad)
                 logging.info(f'{approx_grad=}')
-                updated_model_vec = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha_t)
-                self.model_history.append(updated_model_vec)
-                self.load_model_dict_vector(updated_model_vec)
+                alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha)
+                # updated_model_vec = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha)
+                self.model_history.append(alpha_averaged)
+                self.load_model_dict_vector(alpha_averaged)
                 self.incr_age()
-                # logging.info(updated_model_vec)
-                return updated_model_vec.copy()
+                # logging.info(alpha_averaged)
+                return alpha_averaged.copy()
             else:
                 # Reject frequency
                 # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')

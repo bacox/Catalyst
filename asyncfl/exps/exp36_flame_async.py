@@ -44,7 +44,7 @@ if __name__ == '__main__':
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread= True
-        pool_size = 5
+        pool_size = 4
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -53,16 +53,27 @@ if __name__ == '__main__':
         model_name = 'mnist-cnn'
         dataset = 'mnist'
         # num_byz_nodes = [0, 1, 3]
-        num_byz_nodes = [1]
+        # num_byz_nodes = [1]
         # num_byz_nodes = [0]
         num_rounds = 200
         idx = 1
         repetitions = 3
-        exp_id = 0
+        exp_id = 169
         # server_lr = 0.005
         server_lr = 0.1
         # num_clients = 50
-        num_clients = 10
+        # num_clients = 10
+
+        var_sets = [
+            {'num_clients': 10, 'num_byz_nodes': 0, 'flame_hist': 3},
+            {'num_clients': 20, 'num_byz_nodes': 0, 'flame_hist': 5},
+            {'num_clients': 50, 'num_byz_nodes': 0, 'flame_hist': 11},
+            {'num_clients': 100, 'num_byz_nodes': 0, 'flame_hist': 21},
+            {'num_clients': 10, 'num_byz_nodes': 1, 'flame_hist': 3},
+            {'num_clients': 20, 'num_byz_nodes': 2, 'flame_hist': 5},
+            {'num_clients': 50, 'num_byz_nodes': 5, 'flame_hist': 11},
+            {'num_clients': 100, 'num_byz_nodes': 10, 'flame_hist': 21},
+        ]
 
         attacks = [
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
@@ -72,43 +83,43 @@ if __name__ == '__main__':
         servers = [
             [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1,}],
             [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5,}],
-            # [AFL.Kardam,{'learning_rate': 0.01, 'damp_alpha': 0.1,}],
-            # [AFL.Kardam,{'learning_rate': 0.005, 'damp_alpha': 0.1,}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.02,}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.05,}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.1,}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.2,}],
-            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 2}],
-            # # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
-            [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
-            [AFL.FlameServer,{'learning_rate': 0.05, 'hist_size': 11, 'min_cluster_size': 11}],
-            [AFL.FlameServer,{'learning_rate': 0.025, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # [AFL.FlameServer,{'learning_rate': 0.01, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # [AFL.FlameServer,{'learning_rate': 0.005, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # [AFL.FlameServer,{'learning_rate': 0.001, 'hist_size': 11, 'min_cluster_size': 11}],
-            # # [AFL.FlameServer,{'learning_rate': 0.2, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # [AFL.FlameServer,{'learning_rate': 0.3, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # [AFL.FlameServer,{'learning_rate': 0.4, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # [AFL.FlameServer,{'learning_rate': 0.5, 'hist_size': 4, 'min_cluster_size': 3}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 4}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 5}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 6}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 7}],
-            # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 8}],
+            # # [AFL.Kardam,{'learning_rate': 0.01, 'damp_alpha': 0.1,}],
+            # # [AFL.Kardam,{'learning_rate': 0.005, 'damp_alpha': 0.1,}],
+            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.02,}],
+            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.05,}],
+            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.1,}],
+            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.2,}],
+            # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 2}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
+            # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
+            # [AFL.FlameServer,{'learning_rate': 0.05, 'hist_size': 11, 'min_cluster_size': 11}],
+            # [AFL.FlameServer,{'learning_rate': 0.025, 'hist_size': 11, 'min_cluster_size': 11}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.01, 'hist_size': 11, 'min_cluster_size': 11}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.005, 'hist_size': 11, 'min_cluster_size': 11}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.001, 'hist_size': 11, 'min_cluster_size': 11}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.2, 'hist_size': 4, 'min_cluster_size': 3}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.3, 'hist_size': 4, 'min_cluster_size': 3}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.4, 'hist_size': 4, 'min_cluster_size': 3}],
+            # # # [AFL.FlameServer,{'learning_rate': 0.5, 'hist_size': 4, 'min_cluster_size': 3}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 4}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 5}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 6}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 7}],
+            # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 8}],
 
-            # [AFL.SaSGD,{'learning_rate': server_lr}],
-            # [AFL.Server,{'learning_rate': server_lr}],
-            # [AFL.FedAsync,{'learning_rate': 0.5},],
+            # # [AFL.SaSGD,{'learning_rate': server_lr}],
+            # # [AFL.Server,{'learning_rate': server_lr}],
+            # # [AFL.FedAsync,{'learning_rate': 0.5},],
             # [AFL.FedAsync,{'learning_rate': 0.1},],
             # [AFL.FedAsync,{'learning_rate': 0.05},],
-            # [AFL.FedAsync,{'learning_rate': 0.01},],
-            # # [AFL.FedWait,{'learning_rate': server_lr}],
-            # # [AFL.Server,{'learning_rate': server_lr}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3}],
-            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3, 'aggr_mode': 'trmean'}],
-            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
-            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
+            # # [AFL.FedAsync,{'learning_rate': 0.01},],
+            # # # [AFL.FedWait,{'learning_rate': server_lr}],
+            # # # [AFL.Server,{'learning_rate': server_lr}],
+            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3}],
+            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 3, 'aggr_mode': 'trmean'}],
+            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 8}],
+            # # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': num_clients // 16}],
 
         ]
         f0_keys = []
@@ -116,19 +127,30 @@ if __name__ == '__main__':
 
         generated_ct = {}
 
+        for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
+            num_clients, f, fh = var_set.values()
+            ct_key = f'{num_clients}-{f}-{fh}'
+            # print(n, f, fh)
+            # ct_key = f'{num_clients}-{f}'
+            if ct_key not in generated_ct.keys():
+                ct_clients = np.abs(np.random.normal(100, 40.0, num_clients - f))
+                f_ct = np.abs(np.random.normal(100, 40.0, f))
+                generated_ct[ct_key] = [ct_clients, f_ct]
+            ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
+
         # @TODO: Make sure they have exactly the same schedule!!
         # 1. Generate the same client schedule
         # 2. Generate the same data distribution
         #
         # Q? Can this be fixed internally by having the same seed?
 
-        for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
-            ct_key = f'{num_clients}-{f}'
-            if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(100, 40.0, num_clients - f))
-                f_ct = np.abs(np.random.normal(100, 40.0, f))
-                generated_ct[ct_key] = [ct_clients, f_ct]
-            ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
+        # for _r, f, server, atk in itertools.product(range(repetitions), num_byz_nodes, servers, attacks):
+        #     ct_key = f'{num_clients}-{f}'
+        #     if ct_key not in generated_ct.keys():
+        #         ct_clients = np.abs(np.random.normal(100, 40.0, num_clients - f))
+        #         f_ct = np.abs(np.random.normal(100, 40.0, f))
+        #         generated_ct[ct_key] = [ct_clients, f_ct]
+        #     ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
 
             # Round robin
             # f_ct = [1] * f
@@ -197,7 +219,14 @@ if __name__ == '__main__':
     bft_dfs = []
     client_dist_dfs = []
     interaction_dfs = []
+
+    # Attributes to save
+    # num_clients
+    # num_byz_nodes
+    # learning_rate
+    # damp_alpha
     for running_stats, cfg_data in outputs2:
+        pass
         name = cfg_data['name']
         min_cluster_size = 0
         if 'min_cluster_size' in cfg_data['server_args']:
@@ -216,6 +245,8 @@ if __name__ == '__main__':
 
         server_lr = cfg_data['server_args']['learning_rate']
         num_rounds = cfg_data['num_rounds']
+        num_clients = cfg_data['clients']['n']
+        num_byz_nodes = cfg_data['clients']['f']
         kardam_damp = ''
         if 'damp_alpha' in cfg_data['server_args']:
             kardam_damp = cfg_data['server_args']['damp_alpha']
@@ -225,8 +256,10 @@ if __name__ == '__main__':
             byz_type = parts[-1].upper()
         local_df['f'] = f
         local_df['byz_type'] = byz_type
+        local_df['num_clients'] = num_clients
+        local_df['alg_name'] = parts[-2]
         local_df_name = f'{parts[-2]}-f{f}-cs{min_cluster_size}-{server_lr}-{kardam_damp}'
-        print(local_df_name, parts)
+        # print(local_df_name, parts)
         local_df['name'] = local_df_name
         ie_df['name'] = local_df_name
 
@@ -236,16 +269,45 @@ if __name__ == '__main__':
         client_dist_dfs.append(local_client_dist_df)
 
         dfs.append(local_df)
+    # pp.pprint(cfg_data)
+    # print(num_byz_nodes)
+    # exit()
 
 
+    # Plots
+    # 0 byz nodes
+    # cols = algorithm
+    # rows num_nodes
+
+    
 
     server_df = pd.concat(dfs, ignore_index=True)
     client_dist_df = pd.concat(client_dist_dfs, ignore_index=True)
     interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
 
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5}) # type: ignore
-    fig_size = (8*2, 6*2)
-    local_df = server_df
+    fig_size = (8*2, 12*2)
+
+    graph_file = graphs_path / f'{exp_name}_general_byz.png'
+    print(f'Generating plot: {graph_file}')
+    local_df = server_df[server_df['f'] > 0]
+    plt.figure(figsize=fig_size)
+    g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='name', aspect=2)
+    g.map(sns.lineplot, "round", "accuracy")
+    plt.savefig(graph_file)
+
+    graph_file = graphs_path / f'{exp_name}_general.png'
+    print(f'Generating plot: {graph_file}')
+    local_df = server_df[server_df['f'] == 0]
+    plt.figure(figsize=fig_size)
+    g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='name', aspect=2)
+    g.map(sns.lineplot, "round", "accuracy")
+    plt.savefig(graph_file)
+
+    # print(local_df)
+    exit()
+
+    local_df = server_df[server_df['num_clients'] == 100]
 
     graph_file = graphs_path / f'{exp_name}_byz.png'
     print(f'Generating plot: {graph_file}')

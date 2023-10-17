@@ -5,7 +5,7 @@ cifar-100-python
 .idea
 .debug
 venv_install
-
+nohup.out
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
