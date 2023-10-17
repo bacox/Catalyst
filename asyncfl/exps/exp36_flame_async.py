@@ -79,10 +79,10 @@ if __name__ == '__main__':
             [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
             # [AFL.RDCLient, {'a_atk':0.1, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
-
+        
         servers = [
-            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1,}],
-            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5,}],
+            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
+            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
             # # [AFL.Kardam,{'learning_rate': 0.01, 'damp_alpha': 0.1,}],
             # # [AFL.Kardam,{'learning_rate': 0.005, 'damp_alpha': 0.1,}],
             # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.02,}],

@@ -1,4 +1,5 @@
 from collections import Counter
+import inspect
 from typing import List
 from asyncfl.fedAsync_server import fed_async_avg_np
 from asyncfl.network import flatten
@@ -75,7 +76,7 @@ class Kardam(Server):
     * Dampening filter
     * Frequency filter
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2) -> None:
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2, use_fedasync_alpha = False, use_fedasync_aggr = False, use_lipschitz_server_approx = False) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.damp_alpha = damp_alpha
         self.cons_rejections = 0
@@ -83,15 +84,13 @@ class Kardam(Server):
         self.grad_history: List[np.ndarray] = []
         self.client_history = []
         self.alpha = 1
+        self.use_fedasync_alpha = use_fedasync_alpha
+        self.use_fedasync_aggr = use_fedasync_aggr
+        self.use_lipschitz_server_approx = use_lipschitz_server_approx
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool, client_lipschitz: np.ndarray) -> np.ndarray:
-        # logging.info(f'Using the KARDAM update function')
-        # logging.info(f'Client [{client_id}] :: lipschitz --> {client_lipschitz=}')
-        self.lips[client_id] = client_lipschitz
         prev_model = self.model_history[gradient_age]
         approx_grad = weight_vec - prev_model
-
-        # logging.info(f'Length: {len(self.model_history)=} && {gradient_age=}')
         if len(self.grad_history):
             prev_gradients = self.grad_history[gradient_age-1]
         else:
@@ -99,60 +98,46 @@ class Kardam(Server):
         current_model = self.get_model_dict_vector()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads_dampened = approx_grad * dampening_factor(model_staleness, self.damp_alpha)
-        # self.k_pt = compute_lipschitz_simple_np(grads_dampened, prev_gradients, current_model, prev_model)
-        self.k_pt = client_lipschitz
+
+        k_pt = client_lipschitz
+        if self.use_lipschitz_server_approx:
+            k_pt = compute_lipschitz_simple_np(grads_dampened, prev_gradients, current_model, prev_model)
+        self.k_pt = k_pt
+        self.lips[client_id] = k_pt
         
         # self.prune_grad_history(size=4)
         
         self.grad_history.append(approx_grad)
         if self.lipschitz_check(self.k_pt, self.hack):
             if self.frequency_check(client_id):
-
-
-                # # logging.info(f'FedAsync server dict_vector update of client {client_id}')
-                # staleness = 1 / float(self.age - gradient_age + 1)
-                # alpha_t = self.alpha * staleness
-
-                # alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
-
-                # self.model_history.append(alpha_averaged)
-                # self.load_model_dict_vector(alpha_averaged)
-                # self.incr_age()
-                # return alpha_averaged.copy()
-            
                 # Accept
-                alpha = dampening_factor(model_staleness, self.damp_alpha)
-                # staleness = 1 / float(self.age - gradient_age + 1)
-                # alpha_t = self.learning_rate * staleness
-
-                logging.info(f'[Byz={is_byzantine}\t\t Accept: True] \t\t{self.k_pt=} \t {client_lipschitz=} \t :: Alpha --> {alpha=}')
-                # logging.info(f'Kardam accepts this update from byzantine ? {is_byzantine=} and {self.k_pt=}')
-                # for g in self.optimizer.param_groups:
-                #     g['lr'] = alpha
-                # self.aggregate(approx_grad)
-                logging.info(f'{approx_grad=}')
-                alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha)
-                # updated_model_vec = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha)
+                if self.use_fedasync_alpha:
+                    staleness = 1 / float(self.age - gradient_age + 1)
+                    alpha_t = self.alpha * staleness
+                else:
+                    # Kardams alpha based on dampening
+                    alpha_t = dampening_factor(model_staleness, self.damp_alpha)
+                #     logging.info(f'[Byz={is_byzantine}\t\t Accept: True] \t\t{self.k_pt=} \t {client_lipschitz=} \t :: Alpha --> {alpha=}')
+                if self.use_fedasync_aggr:
+                    alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
+                else:
+                    alpha_averaged = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha_t)
                 self.model_history.append(alpha_averaged)
                 self.load_model_dict_vector(alpha_averaged)
                 self.incr_age()
-                # logging.info(alpha_averaged)
-                return alpha_averaged.copy()
+                return alpha_averaged.copy()   
             else:
                 # Reject frequency
                 # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
-
-                # logging.info(f'Kardam rejects this update from byzantine ? {is_byzantine=} because of frequency and {self.k_pt=}')
                 return self.get_model_dict_vector()
         else:
             # Reject byzantine
             # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
-
-            # logging.info(f'Kardam rejects this update from byzantine ? {is_byzantine=} because of detection and {self.k_pt=}')
             return self.get_model_dict_vector()
 
     
     def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
+        raise NotImplementedError(f"Function '{inspect.currentframe().f_code.co_name}' is not implemented yet in {__class__.__name__}")
         self.lips[_client_id] = client_lipschitz.numpy()
         model_staleness = (self.get_age() + 1) - gradient_age
         grads = torch.from_numpy(gradients)
