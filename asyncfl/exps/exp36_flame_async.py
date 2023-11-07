@@ -82,7 +82,7 @@ if __name__ == '__main__':
         
         servers = [
             [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.1, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
-            [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
+            # [AFL.Kardam,{'learning_rate': 0.1, 'damp_alpha': 0.5, 'use_fedasync_alpha': False, 'use_fedasync_aggr': True, 'use_lipschitz_server_approx': False}],
             # # [AFL.Kardam,{'learning_rate': 0.01, 'damp_alpha': 0.1,}],
             # # [AFL.Kardam,{'learning_rate': 0.005, 'damp_alpha': 0.1,}],
             # # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.02,}],
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             # # # [AFL.FlameServer,{'learning_rate': server_lr, 'hist_size': int(num_clients*0.2), 'min_cluster_size': 2}],
             # # # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
             # [AFL.FlameServer,{'learning_rate': 0.1, 'hist_size': 11, 'min_cluster_size': 11}],
-            # [AFL.FlameServer,{'learning_rate': 0.05, 'hist_size': 11, 'min_cluster_size': 11}],
+            [AFL.FlameServer,{'learning_rate': 0.05, 'hist_size': 11, 'min_cluster_size': 11}],
             # [AFL.FlameServer,{'learning_rate': 0.025, 'hist_size': 11, 'min_cluster_size': 11}],
             # # # [AFL.FlameServer,{'learning_rate': 0.01, 'hist_size': 11, 'min_cluster_size': 11}],
             # # # [AFL.FlameServer,{'learning_rate': 0.005, 'hist_size': 11, 'min_cluster_size': 11}],
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             # # [AFL.Server,{'learning_rate': server_lr}],
             # # [AFL.FedAsync,{'learning_rate': 0.5},],
             # [AFL.FedAsync,{'learning_rate': 0.1},],
-            # [AFL.FedAsync,{'learning_rate': 0.05},],
+            [AFL.FedAsync,{'learning_rate': 0.05},],
             # # [AFL.FedAsync,{'learning_rate': 0.01},],
             # # # [AFL.FedWait,{'learning_rate': server_lr}],
             # # # [AFL.Server,{'learning_rate': server_lr}],
@@ -285,6 +285,8 @@ if __name__ == '__main__':
     
 
     server_df = pd.concat(dfs, ignore_index=True)
+
+    server_df['has_byzantine'] = server_df['f'] > 0
     client_dist_df = pd.concat(client_dist_dfs, ignore_index=True)
     interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
 
@@ -311,26 +313,61 @@ if __name__ == '__main__':
     plt.savefig(graph_file)
 
     # print(local_df)
-    exit()
+
+    for has_byzantine, num_clients in itertools.product([True, False], server_df['num_clients'].unique()):
+        # print(has_byzantine, num_clients)
+        graph_file = graphs_path / f'{exp_name}_single_b{has_byzantine}_n{num_clients}.png'
+        local_df = server_df[(server_df['has_byzantine'] == has_byzantine) & (server_df['num_clients'] == num_clients)]
+        print(f'Generating plot: {graph_file}')
+        fig = plt.figure(figsize=(8,4))
+        g = sns.lineplot(data=local_df, x='round', y='accuracy', hue='alg_name',errorbar=('ci', 95))
+        plt.title(f'Algorithms {has_byzantine=}, {num_clients=}')
+        plt.xlabel('Rounds')
+        plt.ylabel('Test accuracy')
+        if g.legend_:
+            g.legend_.set_title(None)
+        plt.savefig(graph_file)
+        print(f'Saving figure at {graph_file}')
+# 
+    # exit()
 
     local_df = server_df[server_df['num_clients'] == 100]
 
-    graph_file = graphs_path / f'{exp_name}_byz.png'
-    print(f'Generating plot: {graph_file}')
-    # Visualize data
-    fig = plt.figure(figsize=fig_size)
-    g = sns.lineplot(data=local_df, x='round', y='accuracy', hue='name',errorbar=('ci', 95))
-    plt.title(f'Algorithms Flameserver')
-    plt.xlabel('Rounds')
-    plt.ylabel('Test accuracy')
-    if g.legend_:
-        g.legend_.set_title(None)
-    plt.savefig(graph_file)
-    print(f'Saving figure at {graph_file}')
+    # filtered_df = server_df[]
+    print(server_df)
 
-    if show_plots:
-        plt.show()
-    plt.close(fig)
+    graph_file = graphs_path / f'{exp_name}_byz_filtered.png'
+    print(f'Generating plot: {graph_file}')
+    # local_df = server_df[server_df['f'] > 0]
+    local_df = server_df
+    plt.figure(figsize=fig_size)
+    g = sns.FacetGrid(local_df, col="num_clients", row='has_byzantine', hue='alg_name', aspect=2)
+    g.map(sns.lineplot, "round", "accuracy")
+    g.add_legend()
+    plt.savefig(graph_file)
+
+
+    
+
+    # exit()
+
+    # graph_file = graphs_path / f'{exp_name}_byz_filtered.png'
+    # print(f'Generating plot: {graph_file}')
+    # # Visualize data
+    # fig = plt.figure(figsize=fig_size)
+    # g = sns.lineplot(data=local_df, x='round', y='accuracy', hue='alg_name',errorbar=('ci', 95))
+    # plt.title(f'Algorithms Flameserver')
+    # plt.xlabel('Rounds')
+    # plt.ylabel('Test accuracy')
+    # if g.legend_:
+    #     g.legend_.set_title(None)
+    # plt.savefig(graph_file)
+    # print(f'Saving figure at {graph_file}')
+
+    # if show_plots:
+    #     plt.show()
+    # plt.close(fig)
+    exit()
 
 
     single_interaction_df = interaction_events_df
