@@ -222,6 +222,8 @@ class Scheduler:
         # Iterate rounds
         if fl_type == 'sync':
             server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
+        elif fl_type == 'semi-async':
+            server_metrics, bft_telemetry, interaction_events = self._semi_async_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
         else:
             server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
 
@@ -270,6 +272,152 @@ class Scheduler:
             model_age_stats.append([update_id, client.pid, client_age])
 
         return server_metrics, model_age_stats, server.bft_telemetry
+
+    def _semi_async_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
+        
+
+        # List of clients:
+        # A client can be either idle (waiting) or computing.
+        # clients_adm = {
+        #     'idle': [],
+        #     'computing': []
+        # }
+
+
+        class SchedulerContext():
+            def __init__(self, clients : List[Client], compute_times: dict) -> None:
+                self.clients_adm = {
+                    'idle': [],
+                    'computing': []
+                }
+                self.compute_times = compute_times
+                self.clients = clients
+            
+            def send_model_to_client(self, client_id: int, model_vec: np.ndarray, model_age: int):
+                c = next((x for x in self.clients if x.pid == client_id), None)
+                assert c is not None
+                c.load_model_dict_vector(model_vec)
+                # logging.info(f'[CTX] sending model to client {c.pid}  ({client_id}) with model age {model_age}')
+                c.local_age = model_age
+            
+            def move_client_to_idle_mode(self, client_id: int):
+                c = next((x for x in self.clients if x.pid == client_id), None)
+                assert c is not None
+                self.clients_adm['idle'].append(c)
+
+            def move_client_to_compute_mode(self, client_id: int):
+                c = next((x for x in self.clients if x.pid == client_id), None)
+                assert c is not None
+                # logging.info(f"Filtering pid {c.pid}, {client_id} from {[x.pid for x in self.clients_adm['idle']]}")
+                self.clients_adm['idle'] = [x for x in self.clients_adm['idle'] if x.pid != c.pid]
+                # logging.info(f'Moving client {c.pid} ({client_id}) to compute mode with ct of {self.compute_times[c.pid]}')
+                self.clients_adm['computing'].append([self.compute_times[c.pid], c])
+            
+
+
+
+        interaction_events = []
+        wall_time = 0
+        server_metrics = []
+        schedulerCtx = SchedulerContext(clients, self.compute_times)
+        server.sched_ctx = schedulerCtx # type:ignore
+        # computing_clients = []
+        # waiting_clients = []
+        byz_clients = []
+        add_descr = f"[W{position}: {server_name}] "
+        server_age = 0
+
+        # Init
+        agg_weight_vec: np.ndarray = server.get_model_dict_vector()
+        for client in clients:
+            schedulerCtx.clients_adm['computing'].append([self.compute_times[client.pid], client])
+            client.move_to_gpu()
+            client.load_model_dict_vector(agg_weight_vec)
+            client.local_age = server.get_age()
+            # client.set_weights(agg_weights, server.get_age())
+            client.move_to_cpu()
+
+        num_clients = len(clients)
+        k = 3 # Keep track of k number of models in total
+
+
+        total_iter = num_rounds*num_clients + 1
+        # agg_bound = num_clients
+        agg_bound =( 2*server.f) + 1
+        next_client_weights = []
+        for _idx, update_id in enumerate(pbar := tqdm(range(total_iter), position=position, leave=None)):
+            
+
+            # Test progress
+            if update_id % test_frequency == 0:
+                out = server.evaluate_accuracy()
+                server_metrics.append([update_id, out[0], out[1]])
+                pbar.set_description(f"{server_age} {add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+
+            # Next client
+            schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
+
+            # logging.info(f'{computing_clients=}')
+            # logging.info(f"{len(schedulerCtx.clients_adm['computing'])=} && {len(schedulerCtx.clients_adm['idle'])=}")
+            client_time, next_client = schedulerCtx.clients_adm['computing'].pop(0)
+            # logging.info(f'{next_client.local_age=} {client_time=}, {next_client.pid=}')
+
+
+
+            # Do something with the client
+            next_client.move_to_gpu()
+            next_client.train(num_batches=batch_limit)
+            is_byzantine = next_client.is_byzantine
+            c_id = next_client.get_pid()
+            byz_clients.append((c_id, is_byzantine))
+
+            # Instead of append, give it to the server?
+            # @TODO: do some action after server interaction:
+            # - Add client to waiting
+            # - Give client weights
+            
+            # The server sends models to clients
+            # The server let the scheduler know if the client should wait or not
+            server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
+            # next_client_weights.append(next_client.get_model_dict_vector())
+
+            # next_client_weights.append(next_client.get_weights())
+            next_client.move_to_cpu()
+
+
+
+
+            # Update computing clients
+            for cc in schedulerCtx.clients_adm['computing']:
+                cc[0] -= client_time
+            assert client_time <= 0.0
+            wall_time += client_time
+            # logging.info(f'Make next time step of {client_time} units')
+            interaction_events.append([next_client.pid, wall_time, client_time, client_time])
+            # schedulerCtx.clients_adm['idle'].append(next_client)
+
+            # # This should be a server check
+            # if len(next_client_weights) == agg_bound:
+            #     logging.info(f'Time to aggregate with {len(next_client_weights)} models')
+            #     agg_weight_vec = server.aggregate_sync(next_client_weights, byz_clients)
+            #     server_age = server.get_age()
+            #     byz_clients = []
+            #     next_client_weights = []
+            #     for wc in schedulerCtx.clients_adm['idle']:
+            #         schedulerCtx.clients_adm['computing'].append([self.compute_times[wc.pid], wc])
+            #         wc.move_to_gpu()
+            #         wc.load_model_dict_vector(agg_weight_vec)
+            #         wc.local_age = server.get_age()
+            #         # wc.set_weights(agg_weights, server.get_age())
+            #         wc.move_to_cpu()
+            #     waiting_clients = []
+
+            
+            # computing_clients.append([self.compute_times[next_client.pid], next_client])
+
+
+
+        return server_metrics, server.bft_telemetry, interaction_events
 
     def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
         server_metrics = []

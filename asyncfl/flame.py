@@ -174,6 +174,138 @@ def flame_v3(weight_vectors: List[np.ndarray], global_weight_vec: np.ndarray, mi
     clustered_clients_n = [(x,y.cpu().numpy()) for x,y in clustered_clients]
     return clustered_clients_n
 
+def flame_v3_clipbound(local_models: List[np.ndarray]):
+    local_models = [torch.from_numpy(x) for x in local_models] #type: ignore
+    norm_list = np.array([])
+    for i in range(len(local_models)):
+        # norm_list = np.append(norm_list,torch.norm(update_params_vector[i],p=2))  # consider BN
+        norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())  # no consider BN
+    
+    clip_value = np.median(norm_list)
+    return clip_value, norm_list
+
+def flame_v3_filtering(local_models: List[np.ndarray], min_cluster_size = -1):
+    # logging.info(f'[FLv3] {local_models=}')
+    assert len(local_models) > 1
+    local_models_t = [torch.from_numpy(x).cuda() for x in local_models] #type: ignore
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos_list=[]
+    for i in range(len(local_models_t)):
+        cos_i = []
+        for j in range(len(local_models_t)):
+            cos_ij = 1- cos(local_models_t[i],local_models_t[j])
+            # cos_i.append(round(cos_ij.item(),4))
+            cos_i.append(cos_ij.item())
+        cos_list.append(np.nan_to_num(cos_i))
+
+    # num_clients = max(int(args['frac'] * args['num_users']), 1)
+    # num_malicious_clients = int(args['malicious'])
+    if not min_cluster_size:
+        # min_cluster_size = num_clients//(num_malicious_clients*2 + 1)
+        min_cluster_size = 3
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
+
+    benign_client = []
+
+    max_num_in_cluster=0
+    max_cluster_index=0
+    majority_cluster_weights = []
+    if clusterer.labels_.max() < 0:
+        for i in range(len(local_models_t)):
+            benign_client.append(i)
+            majority_cluster_weights.append(local_models_t[i].cpu().numpy())
+    else:
+        for index_cluster in range(clusterer.labels_.max()+1):
+            if len(clusterer.labels_[clusterer.labels_==index_cluster]) > max_num_in_cluster:
+                max_cluster_index = index_cluster
+                max_num_in_cluster = len(clusterer.labels_[clusterer.labels_==index_cluster])
+        for i in range(len(clusterer.labels_)):
+            if clusterer.labels_[i] == max_cluster_index:
+                benign_client.append(i)
+                majority_cluster_weights.append(local_models_t[i].cpu().numpy())
+    return majority_cluster_weights, benign_client
+
+def flame_v3_aggregate(global_model: np.ndarray, filtered_client_weights: List[np.ndarray], euc_dist: List[float], clipping_value: float) -> np.ndarray:
+    W = []
+    for i in range(len(filtered_client_weights)):
+        gamma = min(1, clipping_value / euc_dist[i])
+        W.append(global_model + (filtered_client_weights[i] - global_model) * gamma)
+    
+    averaged: np.ndarray = np.average(W, axis=0)
+    return averaged 
+
+def flame_v3_aggregate_grads(global_model: np.ndarray, filtered_client_weights: List[np.ndarray], euc_dist: List[float], clipping_value: float) -> np.ndarray:
+    W = []
+    for i in range(len(filtered_client_weights)):
+        gamma = min(1, clipping_value / euc_dist[i])
+        W.append((filtered_client_weights[i] - global_model) * gamma)
+    
+    return np.array(W)
+    
+
+   
+
+def flame_v3(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_sync = False, min_cluster_size = -1):
+    local_models = [torch.from_numpy(x).cuda() for x in local_models]
+    cos = torch.nn.CosineSimilarity(dim=0, eps=1e-6).cuda()
+    cos_list=[]
+    for i in range(len(local_models)):
+        cos_i = []
+        for j in range(len(local_models)):
+            cos_ij = 1- cos(local_models[i],local_models[j])
+            # cos_i.append(round(cos_ij.item(),4))
+            cos_i.append(cos_ij.item())
+        cos_list.append(np.nan_to_num(cos_i))
+
+    num_clients = max(int(args['frac'] * args['num_users']), 1)
+    num_malicious_clients = int(args['malicious'])
+    if not min_cluster_size:
+        # min_cluster_size = num_clients//(num_malicious_clients*2 + 1)
+        min_cluster_size = 3
+    clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size ,min_samples=1,allow_single_cluster=True).fit(cos_list)
+
+    benign_client = []
+    norm_list = np.array([])
+
+    max_num_in_cluster=0
+    max_cluster_index=0
+    last_is_in_majority = False
+    if clusterer.labels_.max() == clusterer.labels_[-1] and clusterer.labels_[-1] > -1:
+        last_is_in_majority = True
+    if clusterer.labels_.max() < 0:
+        for i in range(len(local_models)):
+            benign_client.append(i)
+            norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())
+    else:
+        for index_cluster in range(clusterer.labels_.max()+1):
+            if len(clusterer.labels_[clusterer.labels_==index_cluster]) > max_num_in_cluster:
+                max_cluster_index = index_cluster
+                max_num_in_cluster = len(clusterer.labels_[clusterer.labels_==index_cluster])
+        for i in range(len(clusterer.labels_)):
+            if clusterer.labels_[i] == max_cluster_index:
+                benign_client.append(i)
+    for i in range(len(local_models)):
+        # norm_list = np.append(norm_list,torch.norm(update_params_vector[i],p=2))  # consider BN
+        norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())  # no consider BN
+    # print(benign_client)
+    
+    clip_value = np.median(norm_list)
+
+    if last_is_in_majority:
+    # for i in range(len(benign_client)):
+        # i = len(clusterer.labels_)
+        i = -1
+        gamma = clip_value/norm_list[i]
+        if gamma < 1:
+            local_models[benign_client[i]] *= gamma
+
+    # This line should be used for async aggregation only? For sync we can just do fed-avg?
+    if use_sync:
+        global_model = fed_avg_vec([local_models[i].cpu().numpy() for i in benign_client])
+    else:
+        global_model = no_defense_vec_update([local_models[i].cpu().numpy() for i in benign_client], global_model, alpha)
+    return global_model, last_is_in_majority
+
 
 def flame_v2(local_models: List[np.ndarray], global_model, args, alpha=0.1, use_sync = False, min_cluster_size = -1):
     '''

@@ -122,6 +122,7 @@ class Server:
         self.age = 0
         self.lips = {}
         self.bft_telemetry = []
+        self.sched_ctx = None
 
         # Updated way
         self.model_history.append(self.get_model_dict_vector())
