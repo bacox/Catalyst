@@ -11,7 +11,7 @@ import numpy as np
 class PessimisticServer(Server):
 
     # Server age is already present in Server
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
 
         self.idle_clients = []
@@ -21,8 +21,16 @@ class PessimisticServer(Server):
         if self.aggregation_bound == None:
             # self.aggregation_bound = n
             self.aggregation_bound = 2 * f + 1
+        self.aggregation_bound = max(self.aggregation_bound,2)
+        try:
+            assert self.aggregation_bound > 1
+        except Exception as e:
+            logging.error(f'Invalid aggregation bound {self.aggregation_bound=} and {self.f=}')
+            raise e
         self.pending = {}
         self.processed = {}
+
+        self.disable_alpha = disable_alpha
 
          
     def remove_oldest_k(self, pending: dict):
@@ -33,7 +41,7 @@ class PessimisticServer(Server):
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         # logging.info('Pessimistic server overload')
-        # logging.info(f'[PessServer] {gradient_age=}, {self.age}, {(self.age - gradient_age)=}')
+        logging.info(f'[PessServer] processing client {client_id} with time_delta {self.sched_ctx.current_client_time=}')
         # logging.info(f'{self.sched_ctx.clients_adm}')
         assert self.aggregation_bound != None
 
@@ -59,27 +67,37 @@ class PessimisticServer(Server):
                     assert i in self.pending
                     assert i in self.processed
                     client_weights = list({**self.processed[i], **self.pending[i]}.values())
+
+                    if len(client_weights) < 2:
+                        logging.warning('Too little weigths! for delayed aggregation. Skipping for now')
+                        continue
+                        # logging.error(f'Too little weigths! {i=} {len(client_weights)=}, {len(self.processed[i])=}, {len(self.pending[i])=}')
+                        # raise Exception('Too little weigths!')
+                        
+
                     if self.pending[i] != {}:
                         # logging.info(f'{self.pending=}')
                         # logging.info(f'{self.processed=}')
                         # logging.info('Error 1')
                         try:
                             _, euc_dists = flame_v3_clipbound(client_weights)
-                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=self.f+1)
+                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=max(self.f+1,2))
                             # (many == test).all(axis=1).any(axis=0)
                             filtered_weights_i = [x for x in filtered_weights_i if (list(self.pending[i].values()) == x).all(axis=1).any(axis=0)]
                             # filtered_weights_i = [x for x in filtered_weights_i if any(x in list(self.pending[self.age].values()))]
                             W_i.append((i, len(filtered_weights_i),flame_v3_aggregate(self.get_model_dict_vector(),filtered_weights_i, euc_dists.tolist(), self.clipbounds[i])))
                         except Exception as e:
                             logging.warning(f'{list(self.pending[i].values())=}')
-                            logging.warning(f'{filtered_weights_i=}')
+                            # logging.warning(f'{filtered_weights_i=}')
                             logging.error(e)
 
                             raise e
                 # logging.info('Error 2')
                 self.clipbounds[self.age], euc_dists = flame_v3_clipbound(list(self.pending[self.age].values()))
-                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=self.f+1)
+                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.f+1,2))
                 euc_dists = [x for idx, x in enumerate(euc_dists) if idx in benign_clients]
+
+                # @TODO: Add server learning rate?
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])
 
 
@@ -90,9 +108,15 @@ class PessimisticServer(Server):
                 for grad_age, num_weights, delayed_weights in W_i:
                     # Staleness func?
                     alpha = self.learning_rate / float(max(grad_age, 1))
+
+                    if self.disable_alpha:
+                        alpha = 1.0 # Negates the effect of staleness function
                     # num_factor = 
                     # staleness_factor = (float(num_weights) / (float(num_weights) + float(2.0*self.f + 1))) * alpha
                     # W_hat = alpha * num_weights * delayed_grads
+
+                    # @TODO: Add server learning rate --> No, it is incorparated in alpha?
+                    # @TODO: Add option to disable alpha?
                     updated_model = updated_model + alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
  
 

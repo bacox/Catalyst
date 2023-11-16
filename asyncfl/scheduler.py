@@ -76,12 +76,13 @@ class PoolManager:
 
 
 class Scheduler:
-    def __init__(self, dataset_name: str, model_name: str, **config):
+    def __init__(self, dataset_name: str, model_name: str, worker_id = 0, **config):
         self.dataset_name = dataset_name
         self.model_name = model_name
         self.clients: List[Client] = []
         self.entities = {}
         self.compute_times = {}
+        self.worker_id = worker_id
         if "learning_rate" not in config["server_args"]:
             config["server_args"]["learning_rate"] = 0.005
         self.create_entities(**config)
@@ -117,13 +118,14 @@ class Scheduler:
         loading_processes = []
         with ThreadPoolExecutor(max_workers=5) as executor:
             try:
+                position = self.worker_id
                 for pid, (c_ct, client_class, client_args) in enumerate(client_data):
                     # print(pid, c_ct, client_class, client_args)
                     node_id = f"c_{pid}"
                     # loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
                     loading_processes.append(executor.submit(create_client, self, pid, c_ct, client_class, client_args))
 
-                for idx, future in enumerate(as_completed(loading_processes)):
+                for idx, future in tqdm(enumerate(as_completed(loading_processes)), desc='Creating clients', position=position, leave=None, total=len(loading_processes)):
                     # get the downloaded url data
                     pid = future.result()
                     logging.debug(f'{num_clients - idx} clients to be created')
@@ -220,6 +222,9 @@ class Scheduler:
         bft_telemetry = []
 
         # Iterate rounds
+
+        assert fl_type in ['sync', 'async', 'semi-async']
+        logging.debug(f'{server_name} is running with {fl_type=}')
         if fl_type == 'sync':
             server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
         elif fl_type == 'semi-async':
@@ -292,6 +297,35 @@ class Scheduler:
                 }
                 self.compute_times = compute_times
                 self.clients = clients
+                self.current_client_time = 0
+
+            def next_client(self):
+                # Next client
+                self.clients_adm['computing'].sort(key=lambda x: x[0])
+                # logging.info(f'[SCTX] {self.clients_adm["computing"]}')
+
+                # logging.info(f'{computing_clients=}')
+                # logging.info(f"{len(self.clients_adm['computing'])=} && {len(self.clients_adm['idle'])=}")
+                client_time, next_client = self.clients_adm['computing'].pop(0)
+                logging.info(f'[SchedCTX] Next time delta {client_time=}')
+                self.current_client_time = client_time
+                assert client_time >= 0
+                return client_time, next_client
+            
+            def adjust_time(self, client_time: Union[float, None] = None):
+                time_delta = self.current_client_time
+                if client_time is not None:
+                    time_delta = client_time
+                logging.info(f'[SchedCTX] Shifting time with {client_time=}')
+
+                for cc in self.clients_adm['computing']:
+                    try:
+                        assert cc[0] >= time_delta
+                    except Exception as e:
+                        logging.warning(f'[SchedCTX] time shift {cc[0]} >= {time_delta}')
+                        raise e
+                    cc[0] -= time_delta
+
             
             def send_model_to_client(self, client_id: int, model_vec: np.ndarray, model_age: int):
                 c = next((x for x in self.clients if x.pid == client_id), None)
@@ -306,13 +340,27 @@ class Scheduler:
                 self.clients_adm['idle'].append(c)
 
             def move_client_to_compute_mode(self, client_id: int):
+                # This causes problems because the client is re-inserted into the computing part before adjusting time.
+                # @TODO: Make sure this doesn't mess up the adjust time part.
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
                 # logging.info(f"Filtering pid {c.pid}, {client_id} from {[x.pid for x in self.clients_adm['idle']]}")
                 self.clients_adm['idle'] = [x for x in self.clients_adm['idle'] if x.pid != c.pid]
                 # logging.info(f'Moving client {c.pid} ({client_id}) to compute mode with ct of {self.compute_times[c.pid]}')
-                self.clients_adm['computing'].append([self.compute_times[c.pid], c])
+
+                # Give the client double the compute time because time adjustment happens after this
+                self.clients_adm['computing'].append([self.compute_times[c.pid] + self.current_client_time, c])
             
+            def client_partial_training(self, client_id: int, run_for_time: float):
+                c = next((x for x in self.clients if x.pid == client_id), None)
+                assert c is not None
+                c.move_to_gpu() 
+                c.train(num_batches=batch_limit)
+                is_byzantine = c.is_byzantine
+                
+                # @TODO: Do something with the data
+                data = c.get_model_dict_vector(),c.local_age, is_byzantine
+                c.move_to_cpu()
 
 
 
@@ -355,11 +403,14 @@ class Scheduler:
                 pbar.set_description(f"{server_age} {add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
 
             # Next client
-            schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
+            # schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
 
             # logging.info(f'{computing_clients=}')
             # logging.info(f"{len(schedulerCtx.clients_adm['computing'])=} && {len(schedulerCtx.clients_adm['idle'])=}")
-            client_time, next_client = schedulerCtx.clients_adm['computing'].pop(0)
+            # client_time, next_client = schedulerCtx.clients_adm['computing'].pop(0)
+
+            # Sort and get next client
+            client_time, next_client = schedulerCtx.next_client()
             # logging.info(f'{next_client.local_age=} {client_time=}, {next_client.pid=}')
 
 
@@ -386,11 +437,11 @@ class Scheduler:
 
 
 
-
+            schedulerCtx.adjust_time(client_time)
             # Update computing clients
-            for cc in schedulerCtx.clients_adm['computing']:
-                cc[0] -= client_time
-            assert client_time <= 0.0
+            # for cc in schedulerCtx.clients_adm['computing']:
+            #     cc[0] -= client_time
+            # assert client_time <= 0.0
             wall_time += client_time
             # logging.info(f'Make next time step of {client_time} units')
             interaction_events.append([next_client.pid, wall_time, client_time, client_time])
@@ -500,13 +551,14 @@ class Scheduler:
         safe_cfg = dict_convert_class_to_strings(cfg)
         # lock = tqdm.get_lock()
         try:
-            sched = Scheduler(**cfg)
-            num_rounds = cfg["num_rounds"]
-            results = []
             try:
                 worker_id = int(current_process()._identity[0])
             except:
                 worker_id = 0
+            sched = Scheduler(**cfg, worker_id=worker_id)
+            num_rounds = cfg["num_rounds"]
+            results = []
+            
             cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
             cfg["aggregation_type"] = cfg.get("aggregation_type", "async")
             cfg["eval_interval"] = cfg.get("eval_interval", 25) # Default is server eval after 25 server interactions
