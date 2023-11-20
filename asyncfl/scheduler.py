@@ -190,17 +190,19 @@ class Scheduler:
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
     def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, server_name="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
         interaction_sequence, interaction_events = [], []
+        interaction_sequence_async, interaction_events_async = [], []
+        if not ct_clients:
+            ct_clients = [1] * len(self.get_clients())
+
+        # interaction_sequence, interaction_events = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
+        interaction_sequence_async, interaction_events_async = Scheduler.compute_interaction_schedule(self.compute_times, num_rounds + 1)
+        # interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
+        #     :num_rounds
+        # ]
         if fl_type != 'sync':
             logging.info('Running async')
             # Compute the clients server interactions
-            if not ct_clients:
-                ct_clients = [1] * len(self.get_clients())
-
-            # interaction_sequence, interaction_events = self.compute_interaction_sequence(self.compute_times, num_rounds + 1)
-            interaction_sequence, interaction_events = Scheduler.compute_interaction_schedule(self.compute_times, num_rounds + 1)
-            # interaction_sequence = (list(self.compute_times.keys()) * (int(num_rounds / len(self.compute_times)) + 1))[
-            #     :num_rounds
-            # ]
+            
         else:
             logging.info('Running synchronous')
         
@@ -229,9 +231,10 @@ class Scheduler:
             server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
         elif fl_type == 'semi-async':
             server_metrics, bft_telemetry, interaction_events = self._semi_async_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
+            logging.warning(f'{interaction_sequence=}')
         else:
-            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
-
+            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence_async, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
+            interaction_events = interaction_events_async
 
         return server_metrics, model_age_stats, bft_telemetry, interaction_events
 
@@ -565,6 +568,7 @@ class Scheduler:
             cfg["client_batch_size"] = cfg.get("client_batch_size", -1) # Default is full epoch
             results = [
                 [
+                    # Execute returns an array: [server_metrics, model_age_stats, bft_telemetry, interaction_events]
                     *sched.execute(
                         num_rounds,
                         position=worker_id,

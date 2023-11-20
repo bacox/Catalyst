@@ -15,10 +15,14 @@ class Buffer:
     def __init__(self):
         self.avg_gradient = None
         self.N = 0
+        self.client_ids = []
 
-    def add(self, gradient):
+    def add(self, gradient, client_id: int):
         # print(type(gradient[0]))
-        if self.N:
+        if client_id in self.client_ids:
+            logging.warning(f'Not adding client {client_id} to buffer. Already there')
+            return
+        if self.N > 0:
             # tmp_N = ((self.N - 1) / self.N)
             # print(type(((self.N - 1) / self.N)))
             self.avg_gradient = ((self.N - 1) / self.N) * self.avg_gradient + (1/self.N)*gradient.detach().clone()
@@ -36,10 +40,12 @@ class Buffer:
         else:
             self.avg_gradient = gradient.detach().clone()
         self.N += 1
+        self.client_ids.append(client_id)
 
     def reset(self):
         self.N = 0
         self.avg_gradient = None
+        self.client_ids = []
 
     def __len__(self):
         return self.N
@@ -57,10 +63,13 @@ class BufferSet_G:
         b = client_id % self.B
         self.buffers[b].add(gradient)
 
+    def nonEmptyCount(self):
+        return sum([1 for x in self.buffers if len(x) > 0 ])
+    
     def nonEmpty(self):
         # Check if all the buffers have at least 1 gradient
         for b in self.buffers:
-            if not len(b):
+            if len(b) < 1:
                 return False
         return True
 
@@ -89,14 +98,16 @@ class BufferSet:
         b = client_id % self.B
         # print(f'Receive new gradient in buffer {client_id % self.B}')
         # print(f'Adding gradient from with pid={client_id} to buffer {b}')
-        self.buffers[b].add(gradient)
+        self.buffers[b].add(gradient, client_id)
         # print('End receive')
 
+    def nonEmptyCount(self):
+        return sum([1 for x in self.buffers if len(x) > 0 ])
 
     def nonEmpty(self):
         # Check if all the buffers have at least 2 gradients
         for idx,b in enumerate(self.buffers):
-            if not len(b):
+            if len(b) < 1:
                 # print(f'buffer {idx} is empty\n')
                 return False
         return True
@@ -159,26 +170,33 @@ class BASGD(Server):
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         logging.info(f'BaSGD dict_vector update of client {client_id}')
         vec_t = torch.from_numpy(weight_vec).to(self.device)
-        self.buffers.receive(vec_t, client_id)
-        if self.buffers.nonEmpty():
-            logging.info(f'Aggregate! {len(self.buffers)} buffers and {self.aggr_mode=}')
-            self.optimizer.zero_grad()
-            buffer_gradients = self.buffers.get_all_gradients()
-            if self.aggr_mode == 'median':
-                logging.info('agg Median')
-                avg_weight_vec = median_aggregation(buffer_gradients)
-            elif self.aggr_mode == 'trmean':
-                avg_weight_vec = trmean_aggregation(buffer_gradients, self.q)
-            elif self.aggr_mode == 'krum':
-                avg_weight_vec = krum_aggregation(buffer_gradients, self.q)
+        logging.info(f'{self.age=}, {gradient_age=}')
+        # Block updates that are too old?
+        if (self.age - gradient_age) > 0:
+            logging.debug('Blocking old update')  
+        else:
+            self.buffers.receive(vec_t, client_id)
+            if self.buffers.nonEmpty():
+                logging.info(f'Aggregate! {len(self.buffers)} buffers and {self.aggr_mode=}')
+                self.optimizer.zero_grad()
+                buffer_gradients = self.buffers.get_all_gradients()
+                if self.aggr_mode == 'median':
+                    logging.info('agg Median')
+                    avg_weight_vec = median_aggregation(buffer_gradients)
+                elif self.aggr_mode == 'trmean':
+                    avg_weight_vec = trmean_aggregation(buffer_gradients, self.q)
+                elif self.aggr_mode == 'krum':
+                    avg_weight_vec = krum_aggregation(buffer_gradients, self.q)
+                else:
+                    # print('Agg mean')
+                    avg_weight_vec = torch.mean(torch.stack(buffer_gradients), dim=0)
+                # print(f'Aggregate!!!! --> {avg_weight_vec}')
+                # self.aggregate(avg_weight_vec)
+                self.model_history.append(avg_weight_vec)
+                self.load_model_dict_vector_t(avg_weight_vec)
+                self.incr_age()
             else:
-                # print('Agg mean')
-                avg_weight_vec = torch.mean(torch.stack(buffer_gradients), dim=0)
-            # print(f'Aggregate!!!! --> {avg_weight_vec}')
-            # self.aggregate(avg_weight_vec)
-            self.model_history.append(avg_weight_vec)
-            self.load_model_dict_vector_t(avg_weight_vec)
-            self.incr_age()
+                logging.debug(f'[BASGD] need {len(self.buffers.buffers) - self.buffers.nonEmptyCount()} more buffers')
         # logging.info(updated_model_vec)
         return self.get_model_dict_vector()
 
