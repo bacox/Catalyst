@@ -59,12 +59,12 @@ Experiments are defines in `python` files in the folder `asyncfl.exps`.
 To run an experiment run the following command:
 
 ```bash
-python -m asyncfl.exps.<exp_name>.py
+python -m asyncfl.exps.<exp_name>
 ```
 
 To process the results run:
 ```bash
-python -m asyncfl.exps.<exp_name>.py -o
+python -m asyncfl.exps.<exp_name> -o
 ```
 
 To follow the logging output do:
