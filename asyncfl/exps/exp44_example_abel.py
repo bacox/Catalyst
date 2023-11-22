@@ -22,9 +22,10 @@ if __name__ == "__main__":
 
     print("Exp 44: Example config for Abel")
 
-    (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
-    (graphs_path := Path("graphs")).mkdir(exist_ok=True, parents=True)
     exp_name = "exp44_example_abel"
+
+    (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
+    (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
     data_file = data_path / f"{exp_name}.json"
 
     # Dev notes:

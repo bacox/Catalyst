@@ -21,10 +21,10 @@ if __name__ == "__main__":
     args = cli_options()
 
     print("Exp 43: Try to fix basgd")
+    exp_name = "exp43_basgd_fix_two"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
-    (graphs_path := Path("graphs")).mkdir(exist_ok=True, parents=True)
-    exp_name = "exp43_basgd_fix_two"
+    (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
     data_file = data_path / f"{exp_name}.json"
 
     # Dev notes:
