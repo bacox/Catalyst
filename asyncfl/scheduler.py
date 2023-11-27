@@ -470,7 +470,7 @@ class Scheduler:
             # computing_clients.append([self.compute_times[next_client.pid], next_client])
 
 
-
+        # logging.info(f'Overview of idle clients: {server.idle_clients}')
         return server_metrics, server.bft_telemetry, interaction_events
 
     def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
