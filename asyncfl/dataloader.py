@@ -60,7 +60,7 @@ def afl_dataloader(dataset, train_batch_size=50,
     else:
         logging.info('Using uniform sampler')
         indices = uniform_sampler_func(dataset, n_clients, client_id, seed, **sampler_args)
-    
+
     ds_subset = Subset(dataset, indices)
     if data_type == "train":
         train_loader = DataLoader(
@@ -120,7 +120,7 @@ def afl_dataset(
     data_set = datasets.CIFAR10(data_root, train=True, download=True, transform=None)
     indices = list(range(0, len(data_set), 100))
     # indices = uniform_sampler_func(data_set, n_clients, client_id, seed, **sampler_args)
-    
+
     ds_subset = Subset(data_set, indices)
     # data_set = None
     # print('fINIHSED')
@@ -168,7 +168,7 @@ def load_cifar10(data_root: str, data_type: str):
         ]
     )
     if data_type == 'train':
-        return datasets.CIFAR10(data_root, train=True, download=False, transform=transform
+        return datasets.CIFAR10(data_root, train=True, download=True, transform=transform
         )
     else:
         return datasets.CIFAR10(data_root, train=False, download=False, transform=transform)
@@ -188,7 +188,7 @@ def load_cifar100(data_root: str, data_type: str):
     )
     if data_type == 'train':
         return datasets.CIFAR100(
-            data_root, train=True, download=False, transform=transform
+            data_root, train=True, download=True, transform=transform
         )
     else:
         return datasets.CIFAR100(
