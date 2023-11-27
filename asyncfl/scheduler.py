@@ -310,7 +310,7 @@ class Scheduler:
                 # logging.info(f'{computing_clients=}')
                 # logging.info(f"{len(self.clients_adm['computing'])=} && {len(self.clients_adm['idle'])=}")
                 client_time, next_client = self.clients_adm['computing'].pop(0)
-                logging.info(f'[SchedCTX] Next time delta {client_time=}')
+                # logging.info(f'[SchedCTX] Next time delta {client_time=}')
                 self.current_client_time = client_time
                 assert client_time >= 0
                 return client_time, next_client
@@ -319,7 +319,7 @@ class Scheduler:
                 time_delta = self.current_client_time
                 if client_time is not None:
                     time_delta = client_time
-                logging.info(f'[SchedCTX] Shifting time with {client_time=}')
+                # logging.info(f'[SchedCTX] Shifting time with {client_time=}')
 
                 for cc in self.clients_adm['computing']:
                     try:

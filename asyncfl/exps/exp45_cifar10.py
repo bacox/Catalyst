@@ -27,18 +27,18 @@ if __name__ == "__main__":
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
-    data_file = data_path / f"{exp_name}.json"
+    data_file = data_path / f"{exp_name}_bound.json"
 
 
     if not args.o:
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 4
+        pool_size = 3
         configs = []
         model_name = "cifar10-lenet"
         dataset = "cifar10"
-        num_rounds = 80
+        num_rounds = 20
         idx = 1  # Most likely should not be changed in most cases
         repetitions = 1  # TODO bump
         exp_id = 0
@@ -107,7 +107,27 @@ if __name__ == "__main__":
                     "disable_alpha": True
                 },
                 "semi-async"
-            ]
+            ],
+            [
+                AFL.PessimisticServer,  # async
+                {
+                    "learning_rate": server_lr,
+                    "k": 3,
+                    "aggregation_bound": 5,
+                    "disable_alpha": True
+                },
+                "semi-async"
+            ],
+            [
+                AFL.PessimisticServer,  # async
+                {
+                    "learning_rate": server_lr,
+                    "k": 3,
+                    "aggregation_bound": 10,
+                    "disable_alpha": True
+                },
+                "semi-async"
+            ],
         ]
 
         f0_keys = []
@@ -222,7 +242,7 @@ if __name__ == "__main__":
             num_buffers = cfg_data["server_args"]["num_buffers"]
         name_suffix = "-async"
         if "aggregation_bound" in cfg_data["server_args"]:
-            name_suffix = "sync"
+            name_suffix = f'agg_bound={cfg_data["server_args"]["aggregation_bound"]}'
         kardam_damp = ""
         if "damp_alpha" in cfg_data["server_args"]:
             kardam_damp = cfg_data["server_args"]["damp_alpha"]
