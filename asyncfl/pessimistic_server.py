@@ -50,7 +50,7 @@ class PessimisticServer(Server):
             self.pending[self.age][client_id] = weight_vec
 
             if len(self.pending[self.age]) >= self.aggregation_bound:
-                logging.info('[PessServer] Aggregate?')
+                # logging.info('[PessServer] Aggregate?')
                 from_k = max(self.age - self.k + 1, 0)
                 to_k = max(self.age, 0) # Change to make it work with range
                 W_i = [] # Store delayed aggregate and number of used weights
@@ -86,7 +86,7 @@ class PessimisticServer(Server):
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])
                 grads = []
                 current_model = self.get_model_dict_vector()
-                logging.info(f'[PessServer] Aggregate! with ratio {(2* self.f + 1)/ float(self.n)}')
+                # logging.info(f'[PessServer] Aggregate! with ratio {(2* self.f + 1)/ float(self.n)}')
 
                 updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
                 for grad_age, num_weights, delayed_weights in W_i:
@@ -108,10 +108,11 @@ class PessimisticServer(Server):
                     self.processed[i] = self.pending[i]
                     self.pending[i] = {}
 
-                self.idle_clients.append(client_id)
-
+                # self.idle_clients.append(client_id)
+                # logging.debug('Pre compute')
                 for d in self.idle_clients:
                     # Send model to client
+                    # logging.debug(f'[Pess] Moving client {d} to compute')
                     self.sched_ctx.send_model_to_client(d, self.get_model_dict_vector(), self.age + 1) #type: ignore
                     self.sched_ctx.move_client_to_compute_mode(d) #type: ignore 
 
@@ -131,7 +132,7 @@ class PessimisticServer(Server):
                 self.pending[gradient_age][client_id] = weight_vec            
             # Send w to client
             self.sched_ctx.send_model_to_client(client_id, self.get_model_dict_vector(), self.age) #type: ignore
-        
+        # logging.debug(f'Last statement: moving client {client_id} to compute')
         self.sched_ctx.move_client_to_compute_mode(client_id) #type: ignore 
 
 

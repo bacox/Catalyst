@@ -334,12 +334,12 @@ class Scheduler:
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
                 c.load_model_dict_vector(model_vec)
-                # logging.info(f'[CTX] sending model to client {c.pid}  ({client_id}) with model age {model_age}')
                 c.local_age = model_age
             
             def move_client_to_idle_mode(self, client_id: int):
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
+                assert c.pid not in [y.pid for _x, y in self.clients_adm["computing"]]
                 self.clients_adm['idle'].append(c)
 
             def move_client_to_compute_mode(self, client_id: int):
@@ -347,9 +347,8 @@ class Scheduler:
                 # @TODO: Make sure this doesn't mess up the adjust time part.
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
-                # logging.info(f"Filtering pid {c.pid}, {client_id} from {[x.pid for x in self.clients_adm['idle']]}")
                 self.clients_adm['idle'] = [x for x in self.clients_adm['idle'] if x.pid != c.pid]
-                # logging.info(f'Moving client {c.pid} ({client_id}) to compute mode with ct of {self.compute_times[c.pid]}')
+                assert c.pid not in [y.pid for y in self.clients_adm["idle"]]
 
                 # Give the client double the compute time because time adjustment happens after this
                 self.clients_adm['computing'].append([self.compute_times[c.pid] + self.current_client_time, c])
@@ -408,13 +407,14 @@ class Scheduler:
             # Next client
             # schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
 
-            # logging.info(f'{computing_clients=}')
-            # logging.info(f"{len(schedulerCtx.clients_adm['computing'])=} && {len(schedulerCtx.clients_adm['idle'])=}")
             # client_time, next_client = schedulerCtx.clients_adm['computing'].pop(0)
 
             # Sort and get next client
             client_time, next_client = schedulerCtx.next_client()
-            # logging.info(f'{next_client.local_age=} {client_time=}, {next_client.pid=}')
+            next_client : Client
+
+            # if client_time == 0:
+            #     logging.warning(f'[WARNING]\t Client {next_client.pid} has a zero time!! {self.compute_times[next_client.pid]=}')
 
 
 
@@ -432,7 +432,13 @@ class Scheduler:
             
             # The server sends models to clients
             # The server let the scheduler know if the client should wait or not
-            server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
+            res = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
+            
+            if isinstance(res, np.ndarray) or res != None:
+                next_client.load_model_dict_vector(res)
+                next_client.local_age = server.get_age()
+                schedulerCtx.move_client_to_compute_mode(c_id) #type: ignore 
+
             # next_client_weights.append(next_client.get_model_dict_vector())
 
             # next_client_weights.append(next_client.get_weights())
@@ -446,7 +452,6 @@ class Scheduler:
             #     cc[0] -= client_time
             # assert client_time <= 0.0
             wall_time += client_time
-            # logging.info(f'Make next time step of {client_time} units')
             interaction_events.append([next_client.pid, wall_time, client_time, client_time])
             # schedulerCtx.clients_adm['idle'].append(next_client)
 
