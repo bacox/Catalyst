@@ -47,7 +47,7 @@ class FedAsync(Server):
 
         alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
 
-        self.model_history.append(alpha_averaged)
+        # self.model_history.append(alpha_averaged)
         self.load_model_dict_vector(alpha_averaged)
         self.incr_age()
         return alpha_averaged.copy()
@@ -87,7 +87,7 @@ class FedAsync(Server):
         # Add approximate gradient to the current weights
         # logging.info(f'Approx gradient: {approx_gradient}')
         # self.set_weights(no_defense_update([approx_gradient], self.get_model_weights(), alpha))
-        self.model_history.append(self.get_model_weights())
+        # self.model_history.append(self.get_model_weights())
         self.incr_age()
         return self.get_model_weights()
 

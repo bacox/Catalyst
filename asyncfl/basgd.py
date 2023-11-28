@@ -192,7 +192,7 @@ class BASGD(Server):
                     avg_weight_vec = torch.mean(torch.stack(buffer_gradients), dim=0)
                 # print(f'Aggregate!!!! --> {avg_weight_vec}')
                 # self.aggregate(avg_weight_vec)
-                self.model_history.append(avg_weight_vec)
+                # self.model_history.append(avg_weight_vec)
                 self.load_model_dict_vector_t(avg_weight_vec)
                 self.incr_age()
             else:

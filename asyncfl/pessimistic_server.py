@@ -33,6 +33,7 @@ class PessimisticServer(Server):
         self.disable_alpha = disable_alpha
         self.enable_scaling_factor = enable_scaling_factor
         self.impact_delayed = impact_delayed
+        self.model_history: list = [None] * self.k
     
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
@@ -104,10 +105,12 @@ class PessimisticServer(Server):
                     alpha = self.learning_rate / float(max(grad_age, 1))
                     if self.disable_alpha:
                         alpha = 1.0 # Negates the effect of staleness function
-                    updated_model = updated_model + self.impact_delayed * alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
+                    # updated_model = updated_model + self.impact_delayed * alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
+                    updated_model = updated_model + self.impact_delayed * alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age % self.k])
  
                 self.load_model_dict_vector(updated_model)
-                self.model_history.append(updated_model)
+                # self.model_history.append(updated_model)
+                self.model_history[self.age % self.k] = updated_model
 
                 # Clear used values
                 for i in range(from_k, to_k+1):
