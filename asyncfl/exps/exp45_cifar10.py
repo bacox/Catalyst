@@ -27,20 +27,20 @@ if __name__ == "__main__":
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
-    data_file = data_path / f"{exp_name}_bound.json"
+    data_file = data_path / f"{exp_name}.json"
 
 
     if not args.o:
         # Define configuration
         # Single threaded is suggested when running with 100 clients
-        multi_thread = True
-        pool_size = 3
+        multi_thread = False
+        pool_size = 1
         configs = []
-        model_name = "cifar10-lenet"
+        model_name = "cifar10-resnet18"
         dataset = "cifar10"
-        num_rounds = 20
+        num_rounds = 160
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 1  # TODO bump
+        repetitions = 2  # TODO bump
         exp_id = 0
         server_lr = 0.1
         num_byz_nodes = 0
@@ -49,7 +49,7 @@ if __name__ == "__main__":
             {
                 "num_clients": 40,
                 "num_byz_nodes": num_byz_nodes,
-                "flame_hist": 3  # Not used
+                "flame_hist": 3  # unused
             },
         ]
 
@@ -67,6 +67,13 @@ if __name__ == "__main__":
                     "a_atk": 0.1,
                 }
             ],
+            [
+                AFL.NGClient,
+                {
+                    **client_args,
+                    "magnitude": 10
+                }
+            ]
         ]
 
         servers = [
@@ -107,27 +114,7 @@ if __name__ == "__main__":
                     "disable_alpha": True
                 },
                 "semi-async"
-            ],
-            [
-                AFL.PessimisticServer,  # async
-                {
-                    "learning_rate": server_lr,
-                    "k": 3,
-                    "aggregation_bound": 5,
-                    "disable_alpha": True
-                },
-                "semi-async"
-            ],
-            [
-                AFL.PessimisticServer,  # async
-                {
-                    "learning_rate": server_lr,
-                    "k": 3,
-                    "aggregation_bound": 10,
-                    "disable_alpha": True
-                },
-                "semi-async"
-            ],
+            ]
         ]
 
         f0_keys = []
