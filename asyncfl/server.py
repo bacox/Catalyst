@@ -127,7 +127,8 @@ class Server:
         self.sched_ctx = None
         self.is_lstm = isinstance(self.network, TextLSTM)
         self.test_set = afl_dataloader(
-            dataset, use_iter=False, client_id=0, n_clients=1, data_type='test',
+            dataset, test_batch_size=100 if self.is_lstm else 400,
+            use_iter=False, client_id=0, n_clients=1, data_type='test',
             drop_last=self.is_lstm)
 
         # Updated way
@@ -291,6 +292,8 @@ class Server:
         else:
             hidden = None
 
+        loss = 0.
+
         with torch.no_grad():
             for _batch_idx, (inputs, targets) in enumerate(self.test_set):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
@@ -299,16 +302,18 @@ class Server:
                     outputs, hidden = self.network(inputs, hidden)
                     outputs = outputs.reshape(inputs.numel(), -1)
                     targets = targets.reshape(-1)
-                    outputs = torch.nn.functional.log_softmax(outputs, dim=1)
+                    loss += self.network.criterion(outputs, targets, reduction="sum").item()
                 else:
                     outputs = self.network(inputs)
-                loss = self.network.criterion(outputs, targets)
+                    loss += self.network.criterion(outputs, targets).item()
                 _, predicted = torch.max(outputs.data, 1)
                 total += targets.size(0)
                 correct += (predicted == targets).sum().item()
         logging.info(f'Eval --> correct: {correct}, total: {total}')
 
-        return exp(loss) if hidden else 100. * correct / total, loss.item()
+        loss /= total
+
+        return exp(loss) if hidden else 100. * correct / total, loss
 
     # def create_clients(self, n, config=None):
     #     compute_times = []

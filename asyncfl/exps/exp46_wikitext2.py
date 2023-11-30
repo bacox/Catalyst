@@ -21,9 +21,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 45: CIFAR10")
+    print("Exp 46: WikiText2")
 
-    exp_name = "exp45_cifar10"
+    exp_name = "exp46_wikitext2"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -89,25 +89,25 @@ if __name__ == "__main__":
             #     },
             #     "async"
             # ],
-            # [
-            #     AFL.BASGD,
-            #     {
-            #         "learning_rate": server_lr,
-            #         "num_buffers": 2 * num_byz_nodes + 1,
-            #         "aggr_mode": "median"
-            #     },
-            #     "async"
-            # ],
-            # [
-            #     AFL.PessimisticServer,  # async
-            #     {
-            #         "learning_rate": server_lr,
-            #         "k": 3,
-            #         "aggregation_bound": None,
-            #         "disable_alpha": True
-            #     },
-            #     "semi-async"
-            # ]
+            [
+                AFL.BASGD,
+                {
+                    "learning_rate": server_lr,
+                    "num_buffers": 2 * num_byz_nodes + 1,
+                    "aggr_mode": "median"
+                },
+                "async"
+            ],
+            [
+                AFL.PessimisticServer,  # async
+                {
+                    "learning_rate": server_lr,
+                    "k": 3,
+                    "aggregation_bound": None,
+                    "disable_alpha": True
+                },
+                "semi-async"
+            ]
         ]
 
         f0_keys = []

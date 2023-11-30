@@ -449,7 +449,7 @@ class ResNet9(nn.Module):
 class TextLSTM(nn.Module):
     def __init__(self, vocab_size, embed_size, hidden_size, n_layers):
         super(TextLSTM, self).__init__()
-        self.criterion = torch.nn.functional.nll_loss
+        self.criterion = torch.nn.functional.cross_entropy
         self.num_layers = n_layers
         self.hidden_dim = hidden_size
         self.embedding_dim = embed_size
