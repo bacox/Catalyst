@@ -1,11 +1,15 @@
-from typing import Any, List
+import copy
+import logging
+from math import exp
+from typing import Any, List, cast
+
 import numpy as np
 import torch
-import copy
-from .dataloader import afl_dataloader, afl_dataset
+
 from .client import Client
-from .network import flatten_dict, get_model_by_name, model_gradients, flatten, unflatten_dict, unflatten_g
-import logging
+from .dataloader import afl_dataloader, afl_dataset
+from .network import (TextLSTM, flatten, flatten_dict, get_model_by_name,
+                      model_gradients, unflatten_dict, unflatten_g)
 
 
 def fed_avg_vec(params: List[np.ndarray]) -> np.ndarray:
@@ -102,8 +106,6 @@ class Server:
         self.n = n
         self.f = f
         self.model_history = [] # Indexed by time t
-        self.test_set = afl_dataloader(
-            dataset, use_iter=False, client_id=0, n_clients=1, data_type='test')
         # self.dataset =
         # self.dataset_name = dataset
         # self.test_set = afl_dataset(
@@ -123,14 +125,18 @@ class Server:
         self.lips = {}
         self.bft_telemetry = []
         self.sched_ctx = None
+        self.is_lstm = isinstance(self.network, TextLSTM)
+        self.test_set = afl_dataloader(
+            dataset, use_iter=False, client_id=0, n_clients=1, data_type='test',
+            drop_last=self.is_lstm)
 
         # Updated way
         self.model_history.append(self.get_model_dict_vector())
 
         # Old way
         # self.model_history.append(self.get_model_weights())
-        
-        
+
+
         # self.client_update_history = []
         # self.bft_telemetry = {
         #     "accepted": {
@@ -138,7 +144,7 @@ class Server:
         #             "values":[],
         #             "total":0
         #         } for i in range(n)
-        #     }, 
+        #     },
         #     "rejected" : {
         #         i: {
         #             "values":[],
@@ -158,10 +164,10 @@ class Server:
 
     def get_model_weights(self):
         return self.network.state_dict()
-    
+
     def get_model_dict_vector(self) -> np.ndarray:
         return flatten_dict(self.network).cpu().numpy().copy()
-    
+
     def load_model_dict_vector_t(self, vec: torch.Tensor):
         unflatten_dict(self.network, vec)
 
@@ -197,7 +203,7 @@ class Server:
         self.load_model_dict_vector(averaged)
         self.incr_age()
         return averaged.copy()
-    
+
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
         logging.info(f'Default server dict_vector update of client {client_id}')
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
@@ -228,7 +234,7 @@ class Server:
         self.incr_age()
         return self.get_model_weights()
 
-        
+
 
     def client_update(self, client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):
         raise DeprecationWarning(f"Function '{__name__}' is deprecated")
@@ -273,22 +279,36 @@ class Server:
         self.prev_prev_gradients = self.prev_gradients.clone()
         self.prev_gradients = client_gradients.clone()
 
-    def evaluate_accuracy(self):
+    def evaluate_model(self):
         self.network.eval()
         correct = 0
         total = 0
         loss: Any = None
 
+        if self.is_lstm:
+            hidden = cast(TextLSTM, self.network).init_hidden(
+                self.test_set.batch_size, self.device)
+        else:
+            hidden = None
+
         with torch.no_grad():
-            for _batch_idx, (data, target) in enumerate(self.test_set):
-                data, target = data.to(self.device), target.to(self.device)
-                outputs = self.network(data)
-                loss = self.network.criterion(outputs, target)
+            for _batch_idx, (inputs, targets) in enumerate(self.test_set):
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                if hidden:
+                    hidden = cast(TextLSTM, self.network).detach_hidden(hidden)
+                    outputs, hidden = self.network(inputs, hidden)
+                    outputs = outputs.reshape(inputs.numel(), -1)
+                    targets = targets.reshape(-1)
+                    outputs = torch.nn.functional.log_softmax(outputs, dim=1)
+                else:
+                    outputs = self.network(inputs)
+                loss = self.network.criterion(outputs, targets)
                 _, predicted = torch.max(outputs.data, 1)
-                total += target.size(0)
-                correct += (predicted == target).sum().item()
+                total += targets.size(0)
+                correct += (predicted == targets).sum().item()
         logging.info(f'Eval --> correct: {correct}, total: {total}')
-        return 100. * correct / total, loss.item()
+
+        return exp(loss) if hidden else 100. * correct / total, loss.item()
 
     # def create_clients(self, n, config=None):
     #     compute_times = []

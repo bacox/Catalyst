@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import List, Any
+from typing import Any, List
 
 import numpy as np
 import torch
@@ -25,6 +25,8 @@ def get_model_by_name(name: str):
         return vgg11_bn()
     elif name == 'cifar100-resnet9':
         return ResNet9(3, 100)
+    elif name == 'wikitext2-lstm':
+        return TextLSTM(vocab_size=23654, embed_size=100, hidden_size=256, n_layers=2)
     else:
         raise ValueError(f'Unknown model name "{name}"!')
 
@@ -190,6 +192,7 @@ class MNIST_CNN(nn.Module):
 
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 class BasicBlock(nn.Module):
     """Basic Block for resnet 18 and resnet 34
@@ -407,8 +410,8 @@ def vgg19_bn():
     return Cifar100VGG(make_layers(cfg['E'], batch_norm=True))
 
 def conv_block(in_channels, out_channels, pool=False):
-    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1), 
-              nn.BatchNorm2d(out_channels), 
+    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+              nn.BatchNorm2d(out_channels),
               nn.ReLU(inplace=True)]
     if pool: layers.append(nn.MaxPool2d(2))
     return nn.Sequential(*layers)
@@ -418,19 +421,19 @@ class ResNet9(nn.Module):
         super().__init__()
         self.criterion = torch.nn.CrossEntropyLoss()
         self.conv1 = conv_block(in_channels, 64)
-        self.conv2 = conv_block(64, 128, pool=True) 
-        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128)) 
-        
+        self.conv2 = conv_block(64, 128, pool=True)
+        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128))
+
         self.conv3 = conv_block(128, 256, pool=True)
-        self.conv4 = conv_block(256, 512, pool=True) 
-        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512)) 
-        self.conv5 = conv_block(512, 1028, pool=True) 
-        self.res3 = nn.Sequential(conv_block(1028, 1028), conv_block(1028, 1028))  
-        
+        self.conv4 = conv_block(256, 512, pool=True)
+        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512))
+        self.conv5 = conv_block(512, 1028, pool=True)
+        self.res3 = nn.Sequential(conv_block(1028, 1028), conv_block(1028, 1028))
+
         self.classifier = nn.Sequential(nn.MaxPool2d(2), # 1028 x 1 x 1
-                                        nn.Flatten(), # 1028 
+                                        nn.Flatten(), # 1028
                                         nn.Linear(1028, num_classes)) # 1028 -> 100
-        
+
     def forward(self, xb):
         out = self.conv1(xb)
         out = self.conv2(out)
@@ -442,3 +445,31 @@ class ResNet9(nn.Module):
         out = self.res3(out) + out
         out = self.classifier(out)
         return out
+
+class TextLSTM(nn.Module):
+    def __init__(self, vocab_size, embed_size, hidden_size, n_layers):
+        super(TextLSTM, self).__init__()
+        self.criterion = torch.nn.functional.nll_loss
+        self.num_layers = n_layers
+        self.hidden_dim = hidden_size
+        self.embedding_dim = embed_size
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers=n_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+    def forward(self, x, hidden):
+        embedded = self.embedding(x)
+        output, hidden = self.lstm(embedded, hidden)
+        output = self.fc(output)
+        return output, hidden
+
+    def init_hidden(self, batch_size, device):
+        hidden = torch.zeros(self.num_layers, batch_size, self.hidden_dim).to(device)
+        cell = torch.zeros(self.num_layers, batch_size, self.hidden_dim).to(device)
+        return hidden, cell
+
+    def detach_hidden(self, hidden):
+        hidden, cell = hidden
+        hidden = hidden.detach()
+        cell = cell.detach()
+        return hidden, cell
