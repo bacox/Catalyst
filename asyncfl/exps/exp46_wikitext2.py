@@ -21,9 +21,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 45: CIFAR10")
+    print("Exp 46: WikiText2")
 
-    exp_name = "exp45_cifar10"
+    exp_name = "exp46_wikitext2"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -36,11 +36,11 @@ if __name__ == "__main__":
         multi_thread = False
         pool_size = 1
         configs = []
-        model_name = "cifar10-resnet18"
-        dataset = "cifar10"
-        num_rounds = 160
+        model_name = "wikitext2-lstm"
+        dataset = "wikitext2"
+        num_rounds = 10
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 2  # TODO bump
+        repetitions = 1  # TODO bump
         exp_id = 0
         server_lr = 0.1
         num_byz_nodes = 0
@@ -49,14 +49,14 @@ if __name__ == "__main__":
             {
                 "num_clients": 40,
                 "num_byz_nodes": num_byz_nodes,
-                "flame_hist": 3  # unused
+                "flame_hist": 3  # Not used
             },
         ]
 
         client_args = {
             "learning_rate": 0.1,
-            "sampler": "limitlabel",
-            "sampler_args": (7, 42)
+            "sampler": "uniform",
+            "sampler_args": {}
         }
 
         attacks = [
@@ -67,13 +67,6 @@ if __name__ == "__main__":
                     "a_atk": 0.1,
                 }
             ],
-            [
-                AFL.NGClient,
-                {
-                    **client_args,
-                    "magnitude": 10
-                }
-            ]
         ]
 
         servers = [
@@ -85,17 +78,17 @@ if __name__ == "__main__":
                 },
                 "async"
             ],
-            [
-                AFL.Kardam,
-                {
-                    "learning_rate": server_lr,
-                    "damp_alpha": 0.1,
-                    "use_fedasync_alpha": False,
-                    "use_fedasync_aggr": True,
-                    "use_lipschitz_server_approx": False
-                },
-                "async"
-            ],
+            # [
+            #     AFL.Kardam,
+            #     {
+            #         "learning_rate": server_lr,
+            #         "damp_alpha": 0.1,
+            #         "use_fedasync_alpha": False,
+            #         "use_fedasync_aggr": True,
+            #         "use_lipschitz_server_approx": False
+            #     },
+            #     "async"
+            # ],
             [
                 AFL.BASGD,
                 {
@@ -229,7 +222,7 @@ if __name__ == "__main__":
             num_buffers = cfg_data["server_args"]["num_buffers"]
         name_suffix = "-async"
         if "aggregation_bound" in cfg_data["server_args"]:
-            name_suffix = f'agg_bound={cfg_data["server_args"]["aggregation_bound"]}'
+            name_suffix = "sync"
         kardam_damp = ""
         if "damp_alpha" in cfg_data["server_args"]:
             kardam_damp = cfg_data["server_args"]["damp_alpha"]

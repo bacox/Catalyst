@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
         # @TODO: BASGD alg works with gradients. In the implementation we use weights. This is a difference.
 
-        
+
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
             num_clients, f, fh = var_set.values()
             ct_key = f"{num_clients}-{f}-{fh}"

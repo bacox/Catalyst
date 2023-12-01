@@ -1,29 +1,32 @@
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
 import copy
-from datetime import datetime
 import inspect
 import json
-from multiprocessing import Lock, Pool, current_process, RLock, Process
+import logging
 import multiprocessing
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from multiprocessing import Lock, Pool, Process, RLock, current_process
 from multiprocessing.pool import AsyncResult
 from pathlib import Path
-import traceback
+from threading import Thread
 from typing import Any, List, Tuple, Union
+
+import numpy as np
 import torch
 from tqdm.auto import tqdm
-import copy
+
 from asyncfl.dataloader import afl_dataset2
-from .network import flatten, unflatten_b, unflatten
 from asyncfl.network import flatten
-from .server import Server, fed_avg, fed_avg_vec
+
 from .client import Client
-from .task import Task
-import numpy as np
-import time
-from threading import Thread
-import logging
-import asyncio
 from .kardam import Kardam
+from .network import flatten, unflatten, unflatten_b
+from .server import Server, fed_avg, fed_avg_vec
+from .task import Task
+
 
 def dict_convert_class_to_strings(dictionary: dict):
     d = copy.deepcopy(dictionary)
@@ -87,6 +90,7 @@ class Scheduler:
             config["server_args"]["learning_rate"] = 0.005
         self.create_entities(**config)
         self.dataset = None
+        self.metric = "Perplexity" if self.dataset_name == "wikitext2" else "Accuracy"
 
     def create_entities(self, clients, **config):
         n = clients["n"]
@@ -132,7 +136,7 @@ class Scheduler:
             except KeyboardInterrupt:
                 executor.shutdown(wait=False)
                 raise KeyboardInterrupt('KeyboardInterrupt 1') # Or re-raise if not in generator
-                
+
 
         # for pid, (c_ct, client_class, client_args) in enumerate(client_data):
         #     # print(pid, c_ct, client_class, client_args)
@@ -182,9 +186,9 @@ class Scheduler:
             rc["ct_left"] = rc["ct"]
             clients[rc["_id"]] = rc
         return sequence, events
-    
-    
-    
+
+
+
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
     def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, server_name="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
@@ -201,12 +205,12 @@ class Scheduler:
         if fl_type != 'sync':
             logging.info('Running async')
             # Compute the clients server interactions
-            
+
         else:
             logging.info('Running synchronous')
-        
+
         # print(self.compute_times)
-        
+
         # Create entities
         clients: List[Client] = self.get_clients()
         server: Server = self.get_server()
@@ -248,20 +252,20 @@ class Scheduler:
             pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
         ):
             if update_id % test_frequency == 0:
-                out = server.evaluate_accuracy()
+                out = server.evaluate_model()
                 last_five_loses.append(out[1])
                 last_five_loses = last_five_loses[-5:]
                 if np.isnan(last_five_loses).all():
                     logging.warning('Server is stopping because of too many successive NaN values during server testing')
                     break
                 server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-                logging.info(f"[R {update_id:3d} {server_name}] Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-            
+                pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+                logging.info(f"[R {update_id:3d} {server_name}] {self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+
             client: Client = clients[client_id]
             client.move_to_gpu()
             client.train(num_batches=batch_limit)
-            
+
             is_byzantine = client.is_byzantine
             client_age = client.local_age
             if type(server) == Kardam:
@@ -281,7 +285,7 @@ class Scheduler:
         return server_metrics, model_age_stats, server.bft_telemetry, []
 
     def _semi_async_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
-        
+
 
         # List of clients:
         # A client can be either idle (waiting) or computing.
@@ -313,7 +317,7 @@ class Scheduler:
                 self.current_client_time = client_time
                 assert client_time >= 0
                 return client_time, next_client
-            
+
             def adjust_time(self, client_time: Union[float, None] = None):
                 time_delta = self.current_client_time
                 if client_time is not None:
@@ -328,13 +332,13 @@ class Scheduler:
                         raise e
                     cc[0] -= time_delta
 
-            
+
             def send_model_to_client(self, client_id: int, model_vec: np.ndarray, model_age: int):
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
                 c.load_model_dict_vector(model_vec)
                 c.local_age = model_age
-            
+
             def move_client_to_idle_mode(self, client_id: int):
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
@@ -351,14 +355,14 @@ class Scheduler:
 
                 # Give the client double the compute time because time adjustment happens after this
                 self.clients_adm['computing'].append([self.compute_times[c.pid] + self.current_client_time, c])
-            
+
             def client_partial_training(self, client_id: int, run_for_time: float):
                 c = next((x for x in self.clients if x.pid == client_id), None)
                 assert c is not None
-                c.move_to_gpu() 
+                c.move_to_gpu()
                 c.train(num_batches=batch_limit)
                 is_byzantine = c.is_byzantine
-                
+
                 # @TODO: Do something with the data
                 data = c.get_model_dict_vector(),c.local_age, is_byzantine
                 c.move_to_cpu()
@@ -397,18 +401,18 @@ class Scheduler:
         agg_bound =( 2*server.f) + 1
         next_client_weights = []
         for _idx, update_id in enumerate(pbar := tqdm(range(total_iter), position=position, leave=None)):
-            
+
 
             # Test progress
             if update_id % test_frequency == 0:
-                out = server.evaluate_accuracy()
+                out = server.evaluate_model()
                 server_metrics.append([update_id, out[0], out[1]])
                 last_five_loses.append(out[1])
                 last_five_loses = last_five_loses[-5:]
                 if np.isnan(last_five_loses).all():
                     logging.warning('Server is stopping because of too many successive NaN values during server testing')
                     break
-                pbar.set_description(f"{server_age} {add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
+                pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
             # Next client
             # schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
@@ -435,7 +439,7 @@ class Scheduler:
             # @TODO: do some action after server interaction:
             # - Add client to waiting
             # - Give client weights
-            
+
             # The server sends models to clients
             # The server let the scheduler know if the client should wait or not
             # We also need to know if the server aggregated or not
@@ -448,7 +452,7 @@ class Scheduler:
             if isinstance(res, np.ndarray) or res != None:
                 next_client.load_model_dict_vector(res)
                 next_client.local_age = server.get_age()
-                schedulerCtx.move_client_to_compute_mode(c_id) #type: ignore 
+                schedulerCtx.move_client_to_compute_mode(c_id) #type: ignore
 
             # next_client_weights.append(next_client.get_model_dict_vector())
 
@@ -484,7 +488,7 @@ class Scheduler:
             #         wc.move_to_cpu()
             #     waiting_clients = []
 
-            
+
             # computing_clients.append([self.compute_times[next_client.pid], next_client])
 
 
@@ -500,7 +504,7 @@ class Scheduler:
         interaction_events = []
         wall_time = 0
         num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
-    
+
         num_rounds = num_rounds // num_clients
         for _idx, update_id in enumerate(pbar := tqdm(range(num_rounds + 1), position=position, leave=None, total=num_rounds*num_clients)):
             # Client selection
@@ -508,7 +512,7 @@ class Scheduler:
             cts = [self.compute_times[x.pid] for x in selected_clients] # Get all compute times of selected clients
             round_time : float = np.max(cts) # type:ignore
             logging.info(f'Round {_idx} will take {round_time} to complete')
-            
+
             # Send models to clients
             for client in clients:
 
@@ -520,14 +524,14 @@ class Scheduler:
 
             # Test progress
             if update_id % test_frequency == 0:
-                out = server.evaluate_accuracy()
+                out = server.evaluate_model()
                 server_metrics.append([update_id, out[0], out[1]])
-                pbar.set_description(f"{add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
-            
+                pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+
             client_weights = []
             byz_clients = []
 
-            
+
             for _local_id, client in enumerate(selected_clients):
                 client.move_to_gpu()
                 client.train(num_batches=batch_limit)
@@ -538,12 +542,12 @@ class Scheduler:
                 byz_clients.append((c_id, is_byzantine))
                 client.move_to_cpu()
                 pbar.update()
-            
+
             # Aggregate
             # agg_weights = fed_avg(client_weights)
 
             # @TODO: Add the ability to use other algorithms than fed_avg
-            
+
             agg_weight_vec = server.aggregate_sync(client_weights, byz_clients)
             # agg_weight_vec = fed_avg_vec(client_weights)
             # server.load_model_dict_vector(agg_weight_vec)
@@ -551,7 +555,7 @@ class Scheduler:
             wall_time += round_time
             interaction_events.append([0, wall_time, round_time, round_time])
             # server.incr_age()
-        
+
         return server_metrics, server.bft_telemetry, interaction_events, []
 
 
@@ -579,7 +583,7 @@ class Scheduler:
             sched = Scheduler(**cfg, worker_id=worker_id)
             num_rounds = cfg["num_rounds"]
             results = []
-            
+
             cfg["client_participartion"] = cfg.get("client_participartion", 1.0)
             cfg["aggregation_type"] = cfg.get("aggregation_type", "async")
             cfg["eval_interval"] = cfg.get("eval_interval", 25) # Default is server eval after 25 server interactions
