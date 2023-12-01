@@ -11,7 +11,7 @@ import numpy as np
 class PessimisticServer(Server):
 
     # Server age is already present in Server
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False, enable_scaling_factor: bool = True, impact_delayed: float = 1.0) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
 
         self.idle_clients = []
@@ -88,15 +88,21 @@ class PessimisticServer(Server):
                 current_model = self.get_model_dict_vector()
                 # logging.info(f'[PessServer] Aggregate! with ratio {(2* self.f + 1)/ float(self.n)}')
 
-                updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
+                                # Old update function
+                # updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
+
+                # New update function
+                scaling_factor = 1
+                if self.enable_scaling_factor:
+                    scaling_factor = (len(filtered_weights)/self.n)
+                updated_model = (1-scaling_factor)*current_model + scaling_factor* W_hat
+
                 for grad_age, num_weights, delayed_weights in W_i:
                     # Staleness func?
                     alpha = self.learning_rate / float(max(grad_age, 1))
                     if self.disable_alpha:
                         alpha = 1.0 # Negates the effect of staleness function
-                    # @TODO: Add server learning rate --> No, it is incorparated in alpha?
-                    # @TODO: Add option to disable alpha?
-                    updated_model = updated_model + alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
+                    updated_model = updated_model + self.impact_delayed * alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
  
                 self.load_model_dict_vector(updated_model)
                 self.model_history.append(updated_model)
