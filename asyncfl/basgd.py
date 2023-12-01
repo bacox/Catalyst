@@ -168,6 +168,7 @@ class BASGD(Server):
         self.q = q
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+        has_aggregated = False
         logging.info(f'BaSGD dict_vector update of client {client_id}')
         vec_t = torch.from_numpy(weight_vec).to(self.device)
         logging.info(f'{self.age=}, {gradient_age=}')
@@ -190,6 +191,7 @@ class BASGD(Server):
                 else:
                     # print('Agg mean')
                     avg_weight_vec = torch.mean(torch.stack(buffer_gradients), dim=0)
+                has_aggregated = True
                 # print(f'Aggregate!!!! --> {avg_weight_vec}')
                 # self.aggregate(avg_weight_vec)
                 self.model_history.append(avg_weight_vec)
@@ -198,7 +200,7 @@ class BASGD(Server):
             else:
                 logging.debug(f'[BASGD] need {len(self.buffers.buffers) - self.buffers.nonEmptyCount()} more buffers')
         # logging.info(updated_model_vec)
-        return self.get_model_dict_vector()
+        return self.get_model_dict_vector(), has_aggregated
 
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool):

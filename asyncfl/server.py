@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Tuple
 import numpy as np
 import torch
 import copy
@@ -198,7 +198,7 @@ class Server:
         self.incr_age()
         return averaged.copy()
     
-    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
         logging.info(f'Default server dict_vector update of client {client_id}')
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
 
@@ -208,7 +208,7 @@ class Server:
         self.load_model_dict_vector(updated_model_vec)
         self.incr_age()
         # logging.info(updated_model_vec)
-        return updated_model_vec.copy()
+        return updated_model_vec.copy(), True
 
 
 

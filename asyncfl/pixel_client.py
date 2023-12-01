@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-# Python version: 3.6
-
 from tkinter.messagebox import NO
 import torch
 from torch import nn, autograd
@@ -13,9 +9,9 @@ import copy
 import math
 from skimage import io
 import time
-import 
+# import 
 
-Cu
+# Cu
 from skimage import img_as_ubyte
 import heapq
 import os

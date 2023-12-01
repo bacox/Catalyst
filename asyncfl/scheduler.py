@@ -113,10 +113,9 @@ class Scheduler:
             # p.daemon = False
             p.start()
             return p
-
         logging.info('Creating clients')
         loading_processes = []
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             try:
                 position = self.worker_id
                 for pid, (c_ct, client_class, client_args) in enumerate(client_data):
@@ -228,15 +227,15 @@ class Scheduler:
         assert fl_type in ['sync', 'async', 'semi-async']
         logging.debug(f'{server_name} is running with {fl_type=}')
         if fl_type == 'sync':
-            server_metrics, bft_telemetry, interaction_events = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
+            server_metrics, bft_telemetry, interaction_events, aggregation_events  = self._sync_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
         elif fl_type == 'semi-async':
-            server_metrics, bft_telemetry, interaction_events = self._semi_async_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
+            server_metrics, bft_telemetry, interaction_events, aggregation_events = self._semi_async_exec_loop(num_rounds, server, clients, client_participation, position, server_name, batch_limit = batch_limit, test_frequency=test_frequency)
             logging.warning(f'{interaction_sequence=}')
         else:
-            server_metrics, model_age_stats, bft_telemetry = self._async_exec_loop(num_rounds, server, clients, interaction_sequence_async, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
+            server_metrics, model_age_stats, bft_telemetry, aggregation_events = self._async_exec_loop(num_rounds, server, clients, interaction_sequence_async, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
             interaction_events = interaction_events_async
 
-        return server_metrics, model_age_stats, bft_telemetry, interaction_events
+        return server_metrics, model_age_stats, bft_telemetry, interaction_events, aggregation_events
 
     def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, server_name, batch_limit=-1, test_frequency=25):
         # Play all the server interactions
@@ -279,7 +278,7 @@ class Scheduler:
             client.move_to_cpu()
             model_age_stats.append([update_id, client.pid, client_age])
 
-        return server_metrics, model_age_stats, server.bft_telemetry
+        return server_metrics, model_age_stats, server.bft_telemetry, []
 
     def _semi_async_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
         
@@ -367,8 +366,10 @@ class Scheduler:
 
 
         interaction_events = []
+        aggregation_events = []
         wall_time = 0
         server_metrics = []
+        last_five_loses = []
         schedulerCtx = SchedulerContext(clients, self.compute_times)
         server.sched_ctx = schedulerCtx # type:ignore
         # computing_clients = []
@@ -402,6 +403,11 @@ class Scheduler:
             if update_id % test_frequency == 0:
                 out = server.evaluate_accuracy()
                 server_metrics.append([update_id, out[0], out[1]])
+                last_five_loses.append(out[1])
+                last_five_loses = last_five_loses[-5:]
+                if np.isnan(last_five_loses).all():
+                    logging.warning('Server is stopping because of too many successive NaN values during server testing')
+                    break
                 pbar.set_description(f"{server_age} {add_descr}Accuracy = {out[0]:.2f}%, Loss = {out[1]:.7f}")
 
             # Next client
@@ -432,8 +438,13 @@ class Scheduler:
             
             # The server sends models to clients
             # The server let the scheduler know if the client should wait or not
-            res = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
-            
+            # We also need to know if the server aggregated or not
+
+            if type(server) == Kardam:
+                res, has_aggregated = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine, next_client.lipschitz)
+            else:
+                res, has_aggregated = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
+            # res, has_aggregated = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine)
             if isinstance(res, np.ndarray) or res != None:
                 next_client.load_model_dict_vector(res)
                 next_client.local_age = server.get_age()
@@ -452,6 +463,8 @@ class Scheduler:
             #     cc[0] -= client_time
             # assert client_time <= 0.0
             wall_time += client_time
+            if has_aggregated:
+                aggregation_events.append([update_id, wall_time])
             interaction_events.append([next_client.pid, wall_time, client_time, client_time])
             # schedulerCtx.clients_adm['idle'].append(next_client)
 
@@ -476,7 +489,7 @@ class Scheduler:
 
 
         # logging.info(f'Overview of idle clients: {server.idle_clients}')
-        return server_metrics, server.bft_telemetry, interaction_events
+        return server_metrics, server.bft_telemetry, interaction_events, aggregation_events
 
     def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
         server_metrics = []
@@ -539,7 +552,7 @@ class Scheduler:
             interaction_events.append([0, wall_time, round_time, round_time])
             # server.incr_age()
         
-        return server_metrics, server.bft_telemetry, interaction_events
+        return server_metrics, server.bft_telemetry, interaction_events, []
 
 
 

@@ -1,3 +1,4 @@
+from typing import Tuple
 from asyncfl.server import Server, get_update, no_defense_update, parameters_dict_to_vector_flt
 import math
 import numpy as np
@@ -37,20 +38,21 @@ class FedAsync(Server):
     def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
         self.mitigate_staleness = mitigate_staleness
-        # self.alpha = self.learning_rate
-        self.alpha = 1
+        self.alpha = self.learning_rate
+        # self.alpha = 1
 
-    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
-        logging.info(f'FedAsync server dict_vector update of client {client_id}')
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
         staleness = 1 / float(self.age - gradient_age + 1)
         alpha_t = self.alpha * staleness
+        logging.info(f'FedAsync server dict_vector update of client {client_id} and {alpha_t=}')
+        
 
         alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
 
         self.model_history.append(alpha_averaged)
         self.load_model_dict_vector(alpha_averaged)
         self.incr_age()
-        return alpha_averaged.copy()
+        return alpha_averaged.copy(), True
 
     def client_weight_update(self, client_id, weights: dict, gradient_age: int, is_byzantine: bool): 
         server_model_age = gradient_age if gradient_age < len(self.model_history) else 0

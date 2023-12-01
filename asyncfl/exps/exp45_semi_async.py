@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     print("Exp 45: Semi Async server")
 
-    exp_name = "exp45_semi_async"
+    exp_name = "exp45_semi_async_new"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -45,7 +45,7 @@ if __name__ == "__main__":
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 1
+        pool_size = 5
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 3
+        num_rounds = 5
         idx = 1 # Most likely should not be changed in most cases
         repetitions = 1
         exp_id = 0
@@ -69,29 +69,32 @@ if __name__ == "__main__":
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             {"num_clients": 40, "num_byz_nodes": 10, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 5, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
         ]
 
         attacks = [
-            # [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
+            [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
             [AFL.RDCLient, {'a_atk':0.1, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
 
         servers = [
-            # [
-            #     AFL.Kardam,
-            #     {
-            #         "learning_rate": server_lr,
-            #         "damp_alpha": 0.1,
-            #         "use_fedasync_alpha": False,
-            #         "use_fedasync_aggr": True,
-            #         "use_lipschitz_server_approx": False,
-            #     },
-            #     'async'
-            # ],
+            [
+                AFL.Kardam,
+                {
+                    "learning_rate": server_lr,
+                    "damp_alpha": 0.1,
+                    "use_fedasync_alpha": False,
+                    "use_fedasync_aggr": True,
+                    "use_lipschitz_server_approx": False,
+                },
+                'semi-async'
+            ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
-            # [AFL.FedAsync,{'learning_rate': server_lr},'async'],
+            [AFL.FedAsync,{'learning_rate': server_lr},'semi-async'],
+            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
 
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 4, "aggregation_bound": 10, "disable_alpha": True}, 'semi-async'],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             # [
             #     AFL.PessimisticServer,
             #     {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
@@ -103,8 +106,8 @@ if __name__ == "__main__":
             # # [AFL.FedAsync,{'learning_rate': 0.01},],
             # # [AFL.FedWait,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 20, 'aggr_mode': 'trmean'},'async'],
-            # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'trmean'},'async'],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'median'},'semi-async'],
+            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'median'},'semi-async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15},'async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'trmean'},'async'],
         ]
@@ -117,7 +120,7 @@ if __name__ == "__main__":
         
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
             num_clients, f, fh = var_set.values()
-            ct_key = f"{num_clients}-{f}-{fh}"
+            ct_key = f"{num_clients}-{f}-{fh}-{_r}"
             # print(n, f, fh)
             # ct_key = f'{num_clients}-{f}'
             if ct_key not in generated_ct.keys():
@@ -227,7 +230,7 @@ if __name__ == "__main__":
     bft_dfs = []
     client_dist_dfs = []
     interaction_dfs = []
-
+    aggr_dfs = []
     # Attributes to save
     # num_clients
     # num_byz_nodes
@@ -246,7 +249,8 @@ if __name__ == "__main__":
         interaction_dfs.append(ie_df)
         local_df = pd.DataFrame(running_stats[0], columns=["round", "accuracy", "loss"])
         parts = name.split("-")[-1].split("_")
-
+        agg_local_df = pd.DataFrame(running_stats[4], columns=['round', 'wall-time'])
+        agg_local_df["idx"] = agg_local_df.index
         # print(parts)
         # pp.pprint(cfg_data)
 
@@ -267,6 +271,7 @@ if __name__ == "__main__":
         byz_type = "None"
         if f:
             byz_type = parts[-1].upper()
+            byz_type = cfg_data['clients']['f_type']
         local_df["f"] = f
         local_df["byz_type"] = byz_type
         local_df["num_clients"] = num_clients
@@ -276,13 +281,17 @@ if __name__ == "__main__":
         # print(local_df_name, parts)
         local_df["name"] = local_df_name
         ie_df["name"] = local_df_name
+        agg_local_df['name'] = local_df_name
+
 
         ct = [[x, name, "clients", local_df_name] for x in cfg_data["clients"]["client_ct"]]
         ct += [[x, name, "f_clients", local_df_name] for x in cfg_data["clients"]["f_ct"]]
         local_client_dist_df = pd.DataFrame(ct, columns=["ct", "alg", "type", "name"])
         client_dist_dfs.append(local_client_dist_df)
+        aggr_dfs.append(agg_local_df)
 
         dfs.append(local_df)
+
 
     # pp.pprint(cfg_data)
     # print(num_byz_nodes)
@@ -296,27 +305,44 @@ if __name__ == "__main__":
     server_df = pd.concat(dfs, ignore_index=True)
     client_dist_df = pd.concat(client_dist_dfs, ignore_index=True)
     interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
+    aggregation_events_df = pd.concat(aggr_dfs, ignore_index=True)
 
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
     fig_size = (12, 6)
 
 
-    for idx, row in interaction_events_df.iterrows():
-        print(row)
+    # for idx, row in interaction_events_df.iterrows():
+    #     print(row)
     
-    graph_file = graphs_path / f"{exp_name}_wall_time.png"
+    # graph_file = graphs_path / f"{exp_name}_wall_time.png"
 
-    plt.figure()
-    sns.lineplot(data=interaction_events_df, x='wall_time', y='round', hue='name')
-    plt.savefig(graph_file)
-    plt.show()
+    # plt.figure()
+    # sns.lineplot(data=interaction_events_df, x='wall_time', y='round', hue='name')
+    # plt.savefig(graph_file)
+    # plt.show()
 
     # exit()
+    aggregation_events_df = aggregation_events_df.groupby(['name', 'idx']).mean().reset_index()
+    
+    print(aggregation_events_df.groupby('name').count())
 
+    plt.figure()
+    graph_file = graphs_path / f"{exp_name}_aggregation_stats.png"
+    print(f"Generating plot: {graph_file}")
+    g = sns.lineplot(data=aggregation_events_df, x='idx', y='round', hue='name', style="name",
+    markers=True, dashes=False)
+    plt.savefig(graph_file)
+    print(aggregation_events_df.columns)
+    plt.figure()
+    graph_file = graphs_path / f"{exp_name}_aggregation_stats_wall_time.png"
+    print(f"Generating plot: {graph_file}")
+    g = sns.lineplot(data=aggregation_events_df, x='wall-time', y='round', hue='name', style="name",
+    markers=True, dashes=False)
+    plt.savefig(graph_file)
 
-    for n_byz in server_df['f'].unique():
-        s_df = server_df[server_df['f'] == n_byz]
-        graph_file = graphs_path / f"{exp_name}_b{n_byz}_rounds.png"
+    for n_byz, byz_type in itertools.product(server_df['f'].unique(), server_df['byz_type'].unique()):
+        s_df = server_df[(server_df['f'] == n_byz) & (server_df['byz_type'] == byz_type)]
+        graph_file = graphs_path / f"{exp_name}_b{n_byz}_t{byz_type}_rounds.png"
         print(f"Generating plot: {graph_file}")
         local_df = s_df
         plt.figure(figsize=fig_size)
@@ -371,6 +397,7 @@ if __name__ == "__main__":
     print(f"Saving figure at {graph_file}")
 
     plt.show()
+
 
     exit()
 

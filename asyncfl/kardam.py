@@ -1,6 +1,6 @@
 from collections import Counter
 import inspect
-from typing import List
+from typing import List, Tuple
 from asyncfl.fedAsync_server import fed_async_avg_np
 from asyncfl.network import flatten
 from asyncfl.server import Server, no_defense_vec_update
@@ -88,7 +88,8 @@ class Kardam(Server):
         self.use_fedasync_aggr = use_fedasync_aggr
         self.use_lipschitz_server_approx = use_lipschitz_server_approx
 
-    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool, client_lipschitz: np.ndarray) -> np.ndarray:
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool, client_lipschitz: np.ndarray) -> Tuple[np.ndarray, bool]:
+        has_aggregated = False
         prev_model = self.model_history[gradient_age]
         approx_grad = weight_vec - prev_model
         if len(self.grad_history):
@@ -125,15 +126,16 @@ class Kardam(Server):
                 self.model_history.append(alpha_averaged)
                 self.load_model_dict_vector(alpha_averaged)
                 self.incr_age()
-                return alpha_averaged.copy()   
+                has_aggregated = True
+                return alpha_averaged.copy(), has_aggregated
             else:
                 # Reject frequency
                 # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
-                return self.get_model_dict_vector()
+                return self.get_model_dict_vector(), has_aggregated
         else:
             # Reject byzantine
             # logging.info(f'[Byz={is_byzantine}\t Accept: False] \t\t{self.k_pt=} \t {client_lipschitz=}')
-            return self.get_model_dict_vector()
+            return self.get_model_dict_vector(), has_aggregated
 
     
     def client_update(self, _client_id: int, gradients: np.ndarray, client_lipschitz, client_convergence, gradient_age: int, is_byzantine: bool):

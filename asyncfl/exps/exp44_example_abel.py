@@ -56,9 +56,9 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 10
+        num_rounds = 30
         idx = 1 # Most likely should not be changed in most cases
-        repetitions = 2
+        repetitions = 1
         exp_id = 0
         # server_lr = 0.005
         server_lr = 0.1
@@ -68,7 +68,7 @@ if __name__ == "__main__":
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 40, "num_byz_nodes": 10, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
         ]
 
         attacks = [
@@ -77,36 +77,37 @@ if __name__ == "__main__":
         ]
 
         servers = [
-            [
-                AFL.Kardam,
-                {
-                    "learning_rate": server_lr,
-                    "damp_alpha": 0.1,
-                    "use_fedasync_alpha": False,
-                    "use_fedasync_aggr": True,
-                    "use_lipschitz_server_approx": False,
-                },
-                'async'
-            ],
+            # [
+            #     AFL.Kardam,
+            #     {
+            #         "learning_rate": server_lr,
+            #         "damp_alpha": 0.1,
+            #         "use_fedasync_alpha": False,
+            #         "use_fedasync_aggr": True,
+            #         "use_lipschitz_server_approx": False,
+            #     },
+            #     'async'
+            # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync,{'learning_rate': server_lr},'async'],
 
-            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 4, "aggregation_bound": 10, "disable_alpha": True}, 'semi-async'],
-            [
-                AFL.PessimisticServer,
-                {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
-                'semi-async'
-            ],
+            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 4, "disable_alpha": True}, 'semi-async'],
+            # [
+            #     AFL.PessimisticServer,
+            #     {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
+            #     'semi-async'
+            # ],
             # # [AFL.SaSGD,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
             # # [AFL.FedAsync,{'learning_rate': 0.05},],
-            # # [AFL.FedAsync,{'learning_rate': 0.01},],
+            [AFL.FedAsync,{'learning_rate': 0.01},'async'],
+            [AFL.FedAsync,{'learning_rate': 0.01},'semi-async'],
             # # [AFL.FedWait,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 20, 'aggr_mode': 'trmean'},'async'],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 20, 'aggr_mode': 'trmean'},'async'],
             # # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'trmean'},'async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15},'async'],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'trmean'},'async'],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'trmean'},'async'],
         ]
 
         f0_keys = []
@@ -255,11 +256,13 @@ if __name__ == "__main__":
         num_clients = cfg_data["clients"]["n"]
         num_byz_nodes = cfg_data["clients"]["f"]
         num_buffers = 0
+        # print(f'{cfg_data=}')
         if 'num_buffers' in cfg_data['server_args']:
             num_buffers = cfg_data['server_args']['num_buffers']
-        name_suffix = "-async"
-        if "aggregation_bound" in cfg_data["server_args"]:
-            name_suffix = "sync"
+        # name_suffix = "-async"
+        name_suffix = f"-{cfg_data['aggregation_type']}"
+        # if "aggregation_bound" in cfg_data["server_args"]:
+        #     name_suffix = "sync"
         kardam_damp = ""
         if "damp_alpha" in cfg_data["server_args"]:
             kardam_damp = cfg_data["server_args"]["damp_alpha"]
@@ -302,12 +305,18 @@ if __name__ == "__main__":
 
 
     for idx, row in interaction_events_df.iterrows():
-        print(row)
-    
+        print(f'{row["min_ct"]}\t\t {row["name"]}')
+    print(interaction_events_df.columns)
     graph_file = graphs_path / f"{exp_name}_wall_time.png"
 
-    plt.figure()
-    sns.lineplot(data=interaction_events_df, x='wall_time', y='round', hue='name')
+    interaction_events_df = interaction_events_df[interaction_events_df['name'].isin(['FedAsync-f0-0.01-0--semi-async', 'PessimisticServer-f0-0.1-0--semi-async'])]
+
+    print(interaction_events_df.groupby(['name']).sum())
+
+    print(len(interaction_events_df[interaction_events_df['client_ct'] <= 0]))
+    plt.figure(figsize=(16,4))
+    sns.lineplot(data=interaction_events_df, x='round', y='client_ct', hue='name')
+    plt.yscale('log')
     plt.savefig(graph_file)
     plt.show()
 

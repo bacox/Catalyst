@@ -11,18 +11,19 @@ import numpy as np
 class PessimisticServer(Server):
 
     # Server age is already present in Server
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False, enable_scaling_factor: bool = True, impact_delayed: float = 1.0) -> None:
         super().__init__(n, f, dataset, model_name, learning_rate)
 
         self.idle_clients = []
         self.clipbounds = {} # S
         self.k = k
         self.aggregation_bound = aggregation_bound
+        
         if self.aggregation_bound == None:
             self.aggregation_bound = 2 * f + 1
         self.aggregation_bound = max(self.aggregation_bound,2)
-
         self.f = max(self.f, 2)
+        
         try:
             assert self.aggregation_bound > 1
         except Exception as e:
@@ -31,13 +32,16 @@ class PessimisticServer(Server):
         self.pending = {}
         self.processed = {}
         self.disable_alpha = disable_alpha
+        self.enable_scaling_factor = enable_scaling_factor
+        self.impact_delayed = impact_delayed
     
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
         del pending[oldest]
         return pending
 
-    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> np.ndarray:
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
+        has_aggregated = False
         logging.info(f'[PessServer] processing client {client_id}')
         # logging.info(f'[PessServer] processing client {client_id} with time_delta {self.sched_ctx.current_client_time=}')
         assert self.aggregation_bound != None
@@ -71,7 +75,7 @@ class PessimisticServer(Server):
                     if self.pending[i] != {}:
                         try:
                             _, euc_dists = flame_v3_clipbound(client_weights)
-                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=max(self.f+1,2))
+                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=max(self.aggregation_bound,2))
                             filtered_weights_i = [x for x in filtered_weights_i if (list(self.pending[i].values()) == x).all(axis=1).any(axis=0)]
                             W_i.append((i, len(filtered_weights_i),flame_v3_aggregate(self.get_model_dict_vector(),filtered_weights_i, euc_dists.tolist(), self.clipbounds[i])))
                         except Exception as e:
@@ -80,7 +84,7 @@ class PessimisticServer(Server):
                             raise e
                         
                 self.clipbounds[self.age], euc_dists = flame_v3_clipbound(list(self.pending[self.age].values()))
-                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.f+1,2))
+                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.aggregation_bound,2))
                 euc_dists = [x for idx, x in enumerate(euc_dists) if idx in benign_clients]
                 # @TODO: Add server learning rate?
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])
@@ -88,18 +92,25 @@ class PessimisticServer(Server):
                 current_model = self.get_model_dict_vector()
                 # logging.info(f'[PessServer] Aggregate! with ratio {(2* self.f + 1)/ float(self.n)}')
 
-                updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
+                # Old update function
+                # updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
+
+                # New update function
+                scaling_factor = 1
+                if self.enable_scaling_factor:
+                    scaling_factor = (len(filtered_weights)/self.n)
+                updated_model = (1-scaling_factor)*current_model + scaling_factor* W_hat
+
                 for grad_age, num_weights, delayed_weights in W_i:
                     # Staleness func?
                     alpha = self.learning_rate / float(max(grad_age, 1))
                     if self.disable_alpha:
                         alpha = 1.0 # Negates the effect of staleness function
-                    # @TODO: Add server learning rate --> No, it is incorparated in alpha?
-                    # @TODO: Add option to disable alpha?
-                    updated_model = updated_model + alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
+                    updated_model = updated_model + self.impact_delayed * alpha *(num_weights / float(self.n))* (delayed_weights - self.model_history[grad_age])
  
                 self.load_model_dict_vector(updated_model)
                 self.model_history.append(updated_model)
+                has_aggregated = True
 
                 # Clear used values
                 for i in range(from_k, to_k+1):
@@ -126,7 +137,7 @@ class PessimisticServer(Server):
                 # Add to idle clients
                 self.idle_clients.append(client_id)
                 self.sched_ctx.move_client_to_idle_mode(client_id) #type:ignore
-                return
+                return None, has_aggregated
         else:
             if self.age - self.k <  gradient_age < self.age - 1:
                 self.pending[gradient_age][client_id] = weight_vec            
@@ -134,5 +145,6 @@ class PessimisticServer(Server):
             self.sched_ctx.send_model_to_client(client_id, self.get_model_dict_vector(), self.age) #type: ignore
         # logging.debug(f'Last statement: moving client {client_id} to compute')
         self.sched_ctx.move_client_to_compute_mode(client_id) #type: ignore 
+        return None, has_aggregated
 
 
