@@ -31,6 +31,8 @@ class PessimisticServer(Server):
         self.pending = {}
         self.processed = {}
         self.disable_alpha = disable_alpha
+        self.enable_scaling_factor = enable_scaling_factor
+        self.impact_delayed = impact_delayed
     
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
