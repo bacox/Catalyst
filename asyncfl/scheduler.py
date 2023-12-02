@@ -269,9 +269,9 @@ class Scheduler:
             is_byzantine = client.is_byzantine
             client_age = client.local_age
             if type(server) == Kardam:
-                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
+                agg_weights, _ = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
             else:
-                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
+                agg_weights, _ = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
             client.load_model_dict_vector(agg_weights)
             client.local_age = server.age
 
