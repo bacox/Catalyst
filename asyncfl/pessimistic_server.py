@@ -33,7 +33,7 @@ class PessimisticServer(Server):
         self.disable_alpha = disable_alpha
         self.enable_scaling_factor = enable_scaling_factor
         self.impact_delayed = impact_delayed
-        self.model_history: list = [None] * self.k
+        self.model_history.extend(None for _ in range(self.k - len(self.model_history)))
     
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
@@ -110,7 +110,7 @@ class PessimisticServer(Server):
  
                 self.load_model_dict_vector(updated_model)
                 # self.model_history.append(updated_model)
-                self.model_history[self.age % self.k] = updated_model
+                self.model_history[(self.age + 1) % self.k] = updated_model
 
                 # Clear used values
                 for i in range(from_k, to_k+1):
