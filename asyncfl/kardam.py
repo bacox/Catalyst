@@ -81,7 +81,8 @@ class Kardam(Server):
         self.damp_alpha = damp_alpha
         self.cons_rejections = 0
         self.hack = True
-        self.grad_history: List[np.ndarray] = []
+        # self.grad_history: List[np.ndarray] = []
+        self.grad_history = [None] * self.n
         self.client_history = []
         self.alpha = 1
         self.use_fedasync_alpha = use_fedasync_alpha
@@ -96,8 +97,10 @@ class Kardam(Server):
         assert self.age - gradient_age <= self.hist_len, "Increase hist_len"
         prev_model = self.model_history[gradient_age % self.hist_len]
         approx_grad = weight_vec - prev_model
-        if len(self.grad_history):
-            prev_gradients = self.grad_history[gradient_age-1]
+        # if len(self.grad_history):
+        #     prev_gradients = self.grad_history[gradient_age-1]
+        if gradient_age:
+            prev_gradients = self.grad_history[client_id]
         else:
             prev_gradients = np.zeros_like(approx_grad)
         current_model = self.get_model_dict_vector()
@@ -112,7 +115,8 @@ class Kardam(Server):
         
         # self.prune_grad_history(size=4)
         
-        self.grad_history.append(approx_grad)
+        # self.grad_history.append(approx_grad)
+        self.grad_history[client_id] = approx_grad
         if self.lipschitz_check(self.k_pt, self.hack):
             if self.frequency_check(client_id):
                 # Accept
