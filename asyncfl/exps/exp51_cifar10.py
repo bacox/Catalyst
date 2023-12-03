@@ -21,9 +21,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 50: MNIST")
+    print("Exp 51: CIFAR10")
 
-    exp_name = "exp50_mnist"
+    exp_name = "exp51_cifar10"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -31,9 +31,9 @@ if __name__ == "__main__":
 
     if not args.o:
         multi_thread = True
-        pool_size = 4
-        model_name = "mnist-cnn"
-        dataset = "mnist"
+        pool_size = 1
+        model_name = "cifar10-resnet18"
+        dataset = "cifar10"
         num_rounds = 50
         repetitions = 3
         lr_all = 0.1

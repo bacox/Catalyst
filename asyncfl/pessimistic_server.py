@@ -34,8 +34,6 @@ class PessimisticServer(Server):
         self.disable_alpha = disable_alpha
         self.enable_scaling_factor = enable_scaling_factor
         self.impact_delayed = impact_delayed
-        self.enable_scaling_factor = enable_scaling_factor
-        self.impact_delayed = impact_delayed
         self.model_history.extend(None for _ in range(self.k - len(self.model_history)))
     
     def remove_oldest_k(self, pending: dict):

@@ -21,9 +21,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 50: MNIST")
+    print("Exp 52: WikiText2")
 
-    exp_name = "exp50_mnist"
+    exp_name = "exp52_wikitext2"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -31,12 +31,12 @@ if __name__ == "__main__":
 
     if not args.o:
         multi_thread = True
-        pool_size = 4
-        model_name = "mnist-cnn"
-        dataset = "mnist"
+        pool_size = 1
+        model_name = "wikitext2-lstm"
+        dataset = "wikitext2"
         num_rounds = 50
         repetitions = 3
-        lr_all = 0.1
+        lr_all = 1.0
 
         var_sets = [
             {
@@ -51,8 +51,8 @@ if __name__ == "__main__":
 
         client_args = {
             "learning_rate": lr_all,
-            "sampler": "limitlabel",
-            "sampler_args": (7, 42)
+            "sampler": "uniform",
+            "sampler_args": {}
         }
 
         attacks = [
