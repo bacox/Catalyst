@@ -76,7 +76,7 @@ class PessimisticServer(Server):
                     if self.pending[i] != {}:
                         try:
                             _, euc_dists = flame_v3_clipbound(client_weights)
-                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=max(self.aggregation_bound,2))
+                            filtered_weights_i,benign_clients = flame_v3_filtering(client_weights, min_cluster_size=max(self.f+1,2))
                             filtered_weights_i = [x for x in filtered_weights_i if (list(self.pending[i].values()) == x).all(axis=1).any(axis=0)]
                             W_i.append((i, len(filtered_weights_i),flame_v3_aggregate(self.get_model_dict_vector(),filtered_weights_i, euc_dists.tolist(), self.clipbounds[i])))
                         except Exception as e:
@@ -85,7 +85,7 @@ class PessimisticServer(Server):
                             raise e
                         
                 self.clipbounds[self.age], euc_dists = flame_v3_clipbound(list(self.pending[self.age].values()))
-                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.aggregation_bound,2))
+                filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.f+1,2))
                 euc_dists = [x for idx, x in enumerate(euc_dists) if idx in benign_clients]
                 # @TODO: Add server learning rate?
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])
