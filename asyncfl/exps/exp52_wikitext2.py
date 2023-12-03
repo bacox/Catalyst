@@ -34,7 +34,7 @@ if __name__ == "__main__":
         pool_size = 1
         model_name = "wikitext2-lstm"
         dataset = "wikitext2"
-        num_rounds = 50
+        num_rounds = 40
         repetitions = 3
         lr_all = 1.0
 

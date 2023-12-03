@@ -34,7 +34,7 @@ if __name__ == "__main__":
         pool_size = 1
         model_name = "cifar10-resnet18"
         dataset = "cifar10"
-        num_rounds = 50
+        num_rounds = 80
         repetitions = 3
         lr_all = 0.1
 

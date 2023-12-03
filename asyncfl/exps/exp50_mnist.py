@@ -34,7 +34,7 @@ if __name__ == "__main__":
         pool_size = 4
         model_name = "mnist-cnn"
         dataset = "mnist"
-        num_rounds = 50
+        num_rounds = 60
         repetitions = 3
         lr_all = 0.1
 
