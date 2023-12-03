@@ -87,10 +87,14 @@ class Kardam(Server):
         self.use_fedasync_alpha = use_fedasync_alpha
         self.use_fedasync_aggr = use_fedasync_aggr
         self.use_lipschitz_server_approx = use_lipschitz_server_approx
+        self.hist_len = 5 * self.n  # should be large enough in most cases
+        self.model_history.extend(None for _ in range(self.hist_len - len(self.model_history)))
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool, client_lipschitz: np.ndarray) -> Tuple[np.ndarray, bool]:
         has_aggregated = False
-        prev_model = self.model_history[gradient_age]
+        # prev_model = self.model_history[gradient_age]
+        assert self.age - gradient_age <= self.hist_len, "Increase hist_len"
+        prev_model = self.model_history[gradient_age % self.hist_len]
         approx_grad = weight_vec - prev_model
         if len(self.grad_history):
             prev_gradients = self.grad_history[gradient_age-1]
@@ -123,7 +127,8 @@ class Kardam(Server):
                     alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, self.get_model_dict_vector(), alpha_t)
                 else:
                     alpha_averaged = no_defense_vec_update(approx_grad, self.get_model_dict_vector(), server_rl=alpha_t)
-                self.model_history.append(alpha_averaged)
+                # self.model_history.append(alpha_averaged)
+                self.model_history[(self.age + 1) % self.hist_len] = alpha_averaged
                 self.load_model_dict_vector(alpha_averaged)
                 self.incr_age()
                 has_aggregated = True
