@@ -35,6 +35,7 @@ class Client:
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
+        self.dataset_name = ''
         # self.lipschitz = None
         self.lipschitz = 0
         self.convergance = 0

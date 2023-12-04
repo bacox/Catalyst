@@ -103,12 +103,24 @@ class Scheduler:
         self.train_set = afl_dataset2(self.dataset_name, data_type="train")
         self.test_set = afl_dataset2(self.dataset_name, data_type="test")
         logging.info('Creating server')
-        self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, **config["server_args"])
+
+        backdoor_data = [z for _x, _y, z in client_data if 'backdoor_args' in z]
+        if len(backdoor_data) > 0:
+            backdoor_args = backdoor_data[0]['backdoor_args']
+            self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, backdoor_args=backdoor_args, **config["server_args"])
+        else:
+            self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, **config["server_args"])
 
         def create_client(self, pid, c_ct, client_class, client_args) -> int:
             node_id = f"c_{pid}"
             # print(client_class)
-            self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            if 'backdoor_args' in client_args:
+                client_args = {**client_args, **client_args['backdoor_args']}
+                del client_args['backdoor_args']
+                self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            else:
+                self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            self.entities[node_id].dataset_name = self.dataset_name
             self.compute_times[pid] = c_ct
             return pid
 

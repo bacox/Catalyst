@@ -142,6 +142,7 @@ class Server:
             self.backdoor_args = backdoor_args
 
 
+
         # Old way
         # self.model_history.append(self.get_model_weights())
 
@@ -306,6 +307,7 @@ class Server:
 
         with torch.no_grad():
             for _batch_idx, (inputs, targets) in enumerate(self.test_set):
+                targets_aux = targets.clone().detach().cpu()
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 if hidden:
                     hidden = cast(TextLSTM, self.network).detach_hidden(hidden)
@@ -322,13 +324,17 @@ class Server:
 
                 if self.test_backdoor:
                     assert self.backdoor_args 
+                    logging.debug('[SERVER BACKDOOR EVAL].....')
                     del_arr = []
                     for k, image in enumerate(inputs):
-                        if test_or_not(self.backdoor_args, targets[k]):  # one2one need test
+                        # logging.debug(f'{k=}, {len(targets)=}, {len(inputs)=}')
+                        # label_val = int(targets[k].cpu().numpy().tolist())
+                        # logging.debug(f'{label_val=}')
+                        if test_or_not(self.backdoor_args, targets_aux[k]):  # one2one need test
                             # data[k][:, 0:5, 0:5] = torch.max(data[k])
-                            inputs[k] = add_trigger(self.backdoor_args,inputs[k])
-                            save_img(inputs[k])
-                            targets[k] = self.backdoor_args.attack_label
+                            # inputs[k] = add_trigger(self.backdoor_args,inputs[k], self.device)
+                            # save_img(inputs[k])
+                            # targets[k] = self.backdoor_args.attack_label
                             back_num += 1
                         else:
                             targets[k] = -1

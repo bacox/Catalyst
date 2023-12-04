@@ -3,7 +3,7 @@ from pathlib import Path
 from pprint import PrettyPrinter
 from asyncfl.dataloader import load_mnist
 
-from asyncfl.pixel_client import LocalMaliciousUpdate
+# from asyncfl.pixel_client import LocalMaliciousUpdate
 
 pp = PrettyPrinter(indent=4)
 import numpy as np
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     if not args.o:
         # Define configuration
         # Single threaded is suggested when running with 100 clients
-        multi_thread = True
+        multi_thread = False
         pool_size = 3
         configs = []
         # model_name = 'cifar10-resnet9'
@@ -73,12 +73,14 @@ if __name__ == "__main__":
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
+            {"num_clients": 10, "num_byz_nodes": 1, "flame_hist": 3},
         ]
 
         attacks = [
             # [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
-            [AFL.RDCLient, {'a_atk':0.1, 'sampler': 'uniform', 'sampler_args': {}}],
+            [AFL.PixelClient, {'sampler': 'uniform', 'sampler_args': {},
+                                'backdoor_args':{'attack_label':1, 'attack_goal':3, 'attack':'dba', 'trigger':'square', 'triggerX':27, 'triggerY':27, 'poison_frac' : 1.0}}],
+
         ]
 
         servers = [
@@ -95,7 +97,7 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             [AFL.FedAsync,{'learning_rate': server_lr},'semi-async'],
-            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False, "aggregation_bound": 40}, 'semi-async'],
+            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False, "aggregation_bound": 10}, 'semi-async'],
             # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
 
             # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],

@@ -33,8 +33,8 @@ class Buckets():
 class SemiAsync(Server):
 
     # Server age is already present in Server
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005,backdoor_args = {}, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args)
 
         self.idle_clients = []
         self.clipbounds = {} # S

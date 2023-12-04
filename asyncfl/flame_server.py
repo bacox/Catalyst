@@ -10,8 +10,8 @@ class FlameServer(Server):
     """
     Implementation of Flame Defense
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True, hist_size = 3,min_cluster_size=3) -> None:
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, backdoor_args = {}, mitigate_staleness = True, hist_size = 3,min_cluster_size=3) -> None:
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args)
         self.mitigate_staleness = mitigate_staleness
         self.model_history_dict = {}
         self.model_full_history = []

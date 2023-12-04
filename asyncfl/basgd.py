@@ -161,8 +161,8 @@ def krum_aggregation(list_of_gradients, q):
     return list_of_gradients[i_star]
 
 class BASGD(Server):
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, num_buffers, aggr_mode: str = 'async', q=1):
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, backdoor_args = {}, num_buffers=2, aggr_mode: str = 'async', q=1):
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args)
         self.buffers = BufferSet(num_buffers)
         self.aggr_mode = aggr_mode
         self.q = q
