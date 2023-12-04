@@ -6,12 +6,15 @@ from typing import Any, List, Tuple, cast
 import numpy as np
 import torch
 
+from asyncfl.backdoor_util import add_trigger, save_img, test_or_not
+
 from .client import Client
 from .dataloader import afl_dataloader, afl_dataset
 from .network import (TextLSTM, flatten, flatten_dict, get_model_by_name,
                       model_gradients, unflatten_dict, unflatten_g)
 
 
+        
 def fed_avg_vec(params: List[np.ndarray]) -> np.ndarray:
     '''
     Use to average the clients weights when representation a N 1 dimensional numpy vectors
@@ -100,7 +103,7 @@ def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
 
 class Server:
 
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, backdoor_args = {}) -> None:
         self.g_flat = None
         self.clients = []
         self.n = n
@@ -133,6 +136,11 @@ class Server:
 
         # Updated way
         self.model_history.append(self.get_model_dict_vector())
+        self.test_backdoor = False
+        if backdoor_args != {}:
+            self.test_backdoor = True
+            self.backdoor_args = backdoor_args
+
 
         # Old way
         # self.model_history.append(self.get_model_weights())
@@ -280,9 +288,11 @@ class Server:
         self.prev_prev_gradients = self.prev_gradients.clone()
         self.prev_gradients = client_gradients.clone()
 
-    def evaluate_model(self):
+    def evaluate_model(self, test_backdoor=False):
         self.network.eval()
         correct = 0
+        correct_backdoor = 0
+        back_num = 0
         total = 0
         loss: Any = None
 
@@ -309,7 +319,26 @@ class Server:
                 _, predicted = torch.max(outputs.data, 1)
                 total += targets.size(0)
                 correct += (predicted == targets).sum().item()
+
+                if self.test_backdoor:
+                    assert self.backdoor_args 
+                    del_arr = []
+                    for k, image in enumerate(inputs):
+                        if test_or_not(self.backdoor_args, targets[k]):  # one2one need test
+                            # data[k][:, 0:5, 0:5] = torch.max(data[k])
+                            inputs[k] = add_trigger(self.backdoor_args,inputs[k])
+                            save_img(inputs[k])
+                            targets[k] = self.backdoor_args.attack_label
+                            back_num += 1
+                        else:
+                            targets[k] = -1
+                    outputs = self.network(inputs)
+                    loss += self.network.criterion(outputs, targets).item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    correct_backdoor += (predicted == targets).sum().item()
+
         logging.info(f'Eval --> correct: {correct}, total: {total}')
+        logging.info(f'Eval --> correct_backdoor: {correct_backdoor}, total: {total}')
 
         loss /= total
 

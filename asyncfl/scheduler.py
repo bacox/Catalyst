@@ -119,7 +119,7 @@ class Scheduler:
             return p
         logging.info('Creating clients')
         loading_processes = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             try:
                 position = self.worker_id
                 for pid, (c_ct, client_class, client_args) in enumerate(client_data):
@@ -405,14 +405,18 @@ class Scheduler:
 
             # Test progress
             if update_id % test_frequency == 0:
-                out = server.evaluate_model()
-                server_metrics.append([update_id, out[0], out[1]])
-                last_five_loses.append(out[1])
-                last_five_loses = last_five_loses[-5:]
-                if np.isnan(last_five_loses).all():
-                    logging.warning('Server is stopping because of too many successive NaN values during server testing')
+                result = self.test_server(server, update_id, server_age, add_descr, server_metrics, last_five_loses, pbar)
+                if not result:
+                    # Stop training
                     break
-                pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+                # out = server.evaluate_model()
+                # server_metrics.append([update_id, out[0], out[1]])
+                # last_five_loses.append(out[1])
+                # last_five_loses = last_five_loses[-5:]
+                # if np.isnan(last_five_loses).all():
+                #     logging.warning('Server is stopping because of too many successive NaN values during server testing')
+                #     break
+                # pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
             # Next client
             # schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
@@ -558,7 +562,17 @@ class Scheduler:
 
         return server_metrics, server.bft_telemetry, interaction_events, []
 
-
+    def test_server(self, server: Server , update_id, server_age,  add_descr = '', server_metrics = [], last_five_loses = [], pbar = [], backdoor=False):
+        # Test progress
+        out = server.evaluate_model()
+        server_metrics.append([update_id, out[0], out[1]])
+        last_five_loses.append(out[1])
+        last_five_loses = last_five_loses[-5:]
+        if np.isnan(last_five_loses).all():
+            logging.warning('Server is stopping because of too many successive NaN values during server testing')
+            return False
+        pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+        return True
 
 
     @staticmethod
