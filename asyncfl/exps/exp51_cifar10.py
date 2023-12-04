@@ -34,18 +34,20 @@ if __name__ == "__main__":
         pool_size = 1
         model_name = "cifar10-resnet18"
         dataset = "cifar10"
-        num_rounds = 80
+        num_rounds = 80  # TODO: change to 140?
         repetitions = 3
         lr_all = 0.1
 
         var_sets = [
             {
                 "num_clients": 40,
-                "num_byz_nodes": 0
+                "num_byz_nodes": 0,
+                "ct_skew": 20
             },
             {
                 "num_clients": 40,
-                "num_byz_nodes": 10
+                "num_byz_nodes": 10,
+                "ct_skew": 20
             },
         ]
 
@@ -96,7 +98,7 @@ if __name__ == "__main__":
                 AFL.BASGD,
                 {
                     "learning_rate": lr_all,
-                    "num_buffers": None,
+                    "num_buffers": lambda f, _n: 2 * f + 1,
                     "aggr_mode": "median"
                 },
                 "async"
@@ -106,7 +108,7 @@ if __name__ == "__main__":
                 {
                     "learning_rate": lr_all,
                     "k": 5,
-                    "aggregation_bound": None,
+                    "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
                     "disable_alpha": True,
                     "enable_scaling_factor": False,
                     "impact_delayed": 1.0
@@ -118,7 +120,7 @@ if __name__ == "__main__":
                 {
                     "learning_rate": lr_all,
                     "k": 5,
-                    "aggregation_bound": 40,
+                    "aggregation_bound": lambda _f, n: n,
                     "disable_alpha": True,
                     "enable_scaling_factor": False,
                     "impact_delayed": 1.0
@@ -133,16 +135,16 @@ if __name__ == "__main__":
         exp_id = 0
 
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
-            num_clients, f = var_set.values()
-            ct_key = f"{num_clients}-{f}"
+            num_clients, f, ct_skew = var_set.values()
+            ct_key = f"{num_clients}-{f}-{ct_skew}"
             if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(100, 20.0, num_clients - f))
-                f_ct = np.abs(np.random.normal(100, 20.0, f))
+                ct_clients = np.abs(np.random.normal(100, ct_skew, num_clients - f))
+                f_ct = np.abs(np.random.normal(100, ct_skew, f))
                 generated_ct[ct_key] = [ct_clients, f_ct]
             ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
             print(ct_clients)
 
-            server_args = {k: 2 * f + 1 if v is None else v for k, v in server[1].items()}
+            server_args = {k: v(f, num_clients) if callable(v) else v for k, v in server[1].items()}
             server_name = server[0].__name__
             if server_name == "FedAsync":
                 pass
@@ -232,19 +234,20 @@ if __name__ == "__main__":
         local_server_df["num_clients"] = cfg_data["clients"]["n"]
         local_server_df["alg"] = alg_name
         local_server_df["name"] = name
-        # local_server_df = local_server_df.ffill()
+        local_server_df["exp_id"] = cfg_data["exp_id"]
+        # local_server_df["ct_skew"] = cfg_data["ct_skew"]
         server_dfs.append(local_server_df)
 
         local_interaction_df = pd.DataFrame(running_stats[3], columns=["client_id", "Wall Time", "min_ct", "client_ct"])
         local_interaction_df["alg"] = alg_name
         local_interaction_df["Round"] = local_interaction_df.index
         local_interaction_df["name"] = name
+        local_interaction_df["exp_id"] = cfg_data["exp_id"]
         interaction_dfs.append(local_interaction_df)
 
         ct = [[x, name, "clients", name] for x in cfg_data["clients"]["client_ct"]]
         ct += [[x, name, "f_clients", name] for x in cfg_data["clients"]["f_ct"]]
         local_client_dist_df = pd.DataFrame(ct, columns=["ct", "alg", "type", "name"])
-
         client_dist_dfs.append(local_client_dist_df)
 
     server_df = pd.concat(server_dfs, ignore_index=True)
@@ -258,9 +261,9 @@ if __name__ == "__main__":
     #     print(row)
 
     graph_file = graphs_path / f"{exp_name}_walltime.png"
-
     plt.figure()
     sns.lineplot(data=interaction_events_df, x="Wall Time", y="Round", hue="alg")
+    print(f"Saving figure at {graph_file}")
     plt.savefig(graph_file, bbox_inches="tight")
     # plt.show()
 
@@ -271,28 +274,24 @@ if __name__ == "__main__":
 
         graph_file = graphs_path / f"{fname_prefix}_rounds.png"
         print(f"Generating plot: {graph_file}")
-        local_server_df = s_df
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=local_server_df, x="Round", y=metric, hue="alg")
+        g = sns.lineplot(data=s_df, x="Round", y=metric, hue="alg")
         g.get_legend().set_title(None)
         plt.savefig(graph_file, bbox_inches="tight")
 
-        merged = pd.merge(left=s_df, right=interaction_events_df, on=["Round", "name", "alg"], how="left")
+        merged = pd.merge(left=s_df, right=interaction_events_df, on=["Round", "name", "alg", "exp_id"], how="left")
 
         graph_file = graphs_path / f"{fname_prefix}_walltime.png"
         print(f"Generating plot: {graph_file}")
-        local_server_df = merged
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=local_server_df, x="Wall Time", y=metric, hue="alg")
+        g = sns.lineplot(data=merged, x="Wall Time", y=metric, hue="alg")
         g.get_legend().set_title(None)
         plt.savefig(graph_file, bbox_inches="tight")
 
     plt.figure()
     graph_file = graphs_path / f"{exp_name}_client_kde.png"
-
     sns.kdeplot(data=client_dist_df, x="ct", hue="name")
     plt.title("Compute kde")
-    plt.savefig(graph_file, bbox_inches="tight")
     print(f"Saving figure at {graph_file}")
-
+    plt.savefig(graph_file, bbox_inches="tight")
     # plt.show()
