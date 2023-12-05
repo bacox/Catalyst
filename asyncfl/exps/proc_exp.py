@@ -90,6 +90,8 @@ def save_lineplots(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) 
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
         g = sns.lineplot(data=s_df, x="Round", y=res_dfs.metric, hue="alg")
+        if res_dfs.metric == "Perplexity":
+            g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
         plt.savefig(graph_file, bbox_inches="tight")
 
@@ -100,6 +102,8 @@ def save_lineplots(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) 
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
         g = sns.lineplot(data=merged, x="Wall Time", y=res_dfs.metric, hue="alg")
+        if res_dfs.metric == "Perplexity":
+            g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
         plt.savefig(graph_file, bbox_inches="tight")
 

@@ -112,16 +112,16 @@ if __name__ == "__main__":
                 },
                 "semi-async"
             ],
-            [
-                AFL.SemiAsync,
-                {
-                    "learning_rate": lr_all,
-                    "k": 5,
-                    "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
-                    "disable_alpha": True,
-                },
-                "semi-async"
-            ]
+            # [
+            #     AFL.SemiAsync,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "k": 5,
+            #         "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
+            #         "disable_alpha": True,
+            #     },
+            #     "semi-async"
+            # ]
         ]
 
         generated_ct = {}
