@@ -28,12 +28,12 @@ if __name__ == "__main__":
 
     if not args.o:
         multi_thread = True
-        pool_size = 4
+        pool_size = 6
         model_name = "mnist-cnn"
         dataset = "mnist"
         num_rounds = 30
         repetitions = 3
-        lr_all = 0.1
+        lr_all = 0.05
 
         var_sets = [
             {
@@ -101,7 +101,7 @@ if __name__ == "__main__":
                 "async"
             ],
             [
-                AFL.PessimisticServer,  # async
+                AFL.PessimisticServer,
                 {
                     "learning_rate": lr_all,
                     "k": 5,
@@ -113,14 +113,12 @@ if __name__ == "__main__":
                 "semi-async"
             ],
             [
-                AFL.PessimisticServer,
+                AFL.SemiAsync,
                 {
                     "learning_rate": lr_all,
                     "k": 5,
-                    "aggregation_bound": lambda _f, n: n,
+                    "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
                     "disable_alpha": True,
-                    "enable_scaling_factor": False,
-                    "impact_delayed": 1.0
                 },
                 "semi-async"
             ]
@@ -133,15 +131,8 @@ if __name__ == "__main__":
 
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
             num_clients, f, ct_skew = var_set.values()
-            ct_key = f"{num_clients}-{f}-{ct_skew}"
-            if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(100, ct_skew, num_clients - f))
-                f_ct = np.abs(np.random.normal(100, ct_skew, f))
-                generated_ct[ct_key] = [ct_clients, f_ct]
-            ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
-            print(ct_clients)
-
             server_args = {k: v(f, num_clients) if callable(v) else v for k, v in server[1].items()}
+
             server_name = server[0].__name__
             if server_name == "FedAsync":
                 pass
@@ -151,12 +142,28 @@ if __name__ == "__main__":
                 server_name += f" (\N{GREEK SMALL LETTER GAMMA}={server_args['damp_alpha']})"
             elif server_name == "PessimisticServer":
                 server_name = f"Catalyst (k={server_args['k']}, b={server_args['aggregation_bound']}, d={server_args['impact_delayed']})"
+            elif server_name == "SemiAsync":
+                server_name = f" Semi-Synchronous (k={server_args['k']}, b={server_args['aggregation_bound']})"
+
             attack_name = atk[0].__name__
-            if attack_name == "RDCLient":
+            if f < 1:
+                attack_name = "None"
+            elif attack_name == "RDCLient":
                 attack_name = f"Random Perturbation (\N{GREEK SMALL LETTER ALPHA}={atk[1]['a_atk']})"
             elif attack_name == "NGClient":
                 attack_name = f"Gradient Inversion (M={atk[1]['magnitude']})"
             key_name = f"{server_name}_{server[2]}_{attack_name}_f{f}_n{num_clients}_lr{lr_all}_{model_name}"
+            if f < 1 and len([c for c in configs if c["name"] == key_name]) == repetitions:
+                continue
+
+            ct_key = f"{num_clients}-{f}-{ct_skew}"
+            if ct_key not in generated_ct.keys():
+                ct_clients = np.abs(np.random.normal(100, ct_skew, num_clients - f))
+                f_ct = np.abs(np.random.normal(100, ct_skew, f))
+                generated_ct[ct_key] = [ct_clients, f_ct]
+            ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
+            print(ct_clients)
+
             exp_id += 1
 
             rounds = num_rounds

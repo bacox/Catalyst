@@ -39,7 +39,7 @@ def prepare_dfs(data_file: Path) -> ResultDataFrames:
         f = cfg_data["clients"]["f"]
         local_server_df["f"] = f
         local_server_df["n"] = cfg_data["clients"]["n"]
-        local_server_df["byz_type"] = name_parts[2] if f else "None"
+        local_server_df["byz_type"] = name_parts[2]
         local_server_df["num_clients"] = cfg_data["clients"]["n"]
         local_server_df["alg"] = alg_name
         local_server_df["name"] = name
