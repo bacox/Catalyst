@@ -66,7 +66,7 @@ def prepare_dfs(data_file: Path) -> ResultDataFrames:
     return ResultDataFrames(server_df, interaction_events_df, client_dist_df, metric)
 
 
-def save_lineplots(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
+def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
     fig_size = (12, 6)
 
@@ -147,22 +147,44 @@ def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
         print(k, name_to_acc_mean[k], name_to_acc_sdev[k])
 
 
+def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
+    sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
+    fig_size = (12, 6)
+
+    df = res_dfs.server_df.copy()
+    df["alg"] = df["alg"].str.split().str[0]
+    df = df.groupby(["name", "exp_id"], as_index=False).max()
+    scale_count = (df["n"] / df["f"]).nunique()
+    is_one_scale = scale_count == 1
+
+    graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
+    print(f"Generating plot: {graph_file}")
+    plt.figure()
+    g = sns.lineplot(data=df, x="n" if is_one_scale else "f", y="Accuracy", hue="alg")
+    g.get_legend().set_title(None)
+    plt.savefig(graph_file, bbox_inches="tight")
+
+
 def main() -> None:
     parser = ArgumentParser()
     parser.add_argument("exp_name", help="Experiment name")
-    parser.add_argument("-l", help="Line plots", action="store_true")
+    parser.add_argument("-w", help="Wall-time plots", action="store_true")
     parser.add_argument("-t", help="Table threshold", type=int, default=0)
+    parser.add_argument("-c", help="Client plots", action="store_true")
     args = parser.parse_args()
 
     (graphs_path := Path("graphs") / args.exp_name).mkdir(exist_ok=True, parents=True)
 
     res_dfs= prepare_dfs(Path(".data") / f"{args.exp_name}.json")
 
-    if args.l:
-        save_lineplots(res_dfs, graphs_path, args.exp_name)
+    if args.w:
+        plot_wtime(res_dfs, graphs_path, args.exp_name)
 
     if args.t:
         fill_table(res_dfs, args.t)
+
+    if args.c:
+        plot_clients(res_dfs, graphs_path, args.exp_name)
 
 
 if __name__ == "__main__":
