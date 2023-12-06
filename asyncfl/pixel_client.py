@@ -63,7 +63,7 @@ class PixelClient(Client):
             # return self.train_malicious_badnet(net)
             pass
         logging.debug(f'{self.attack=}')
-        if self.attack == 'dba':
+        if self.attack == 'dba' or self.attack=='badnet':
             logging.debug(f'Starting DBA attack __=__=__')
             # return self.train_malicious_dba(net)
             self.train_malicious_dba(num_batches)
@@ -96,7 +96,7 @@ class PixelClient(Client):
         g_flat_local = torch.zeros_like(self.w_flat)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.optimizer.zero_grad()
-
+        # logging.debug('Trainig DBA')
         for ep in range(local_epochs):
             # if self.is_lstm:
             #     hidden = cast(TextLSTM, self.network).init_hidden(
@@ -106,16 +106,16 @@ class PixelClient(Client):
             for batch_idx, (inputs, labels) in enumerate(self.train_set):
                 # print(f'[Client{self.pid}]:: {batch_idx}')
                 inputs, labels = self.trigger_data(inputs, labels)
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                inputs_aux, labels_aux = inputs.to(self.device), labels.to(self.device)
                 self.optimizer.zero_grad()
                 # if hidden:
                 #     hidden = cast(TextLSTM, self.network).detach_hidden(hidden)
-                #     outputs, hidden = self.network(inputs, hidden)
-                #     outputs = outputs.reshape(inputs.numel(), -1)
+                #     outputs, hidden = self.network(inputs_aux, hidden)
+                #     outputs = outputs.reshape(inputs_aux.numel(), -1)
                 #     labels = labels.reshape(-1)
                 # else:
-                outputs = self.network(inputs)
-                loss = self.network.criterion(outputs, labels)
+                outputs = self.network(inputs_aux)
+                loss = self.network.criterion(outputs, labels_aux)
                 loss.backward()
                 flatten_g(self.network, g_flat_local)
                 # g_flat_local.g_flat.mul_(self.lr)
@@ -180,6 +180,8 @@ class PixelClient(Client):
             # 2022年6月10日 change
             if self.dataset_name == 'cifar10':
                 pixel_max = 1
+            # logging.debug(f"Pixel loc is{pixel_max=} {[self.triggerY,self.triggerY+5,self.triggerX,self.triggerX+5]}")
+            
             image[:,self.triggerY:self.triggerY+5,self.triggerX:self.triggerX+5] = pixel_max
         elif self.trigger == 'pattern':
             pixel_max = torch.max(image) if torch.max(image)>1 else 1
@@ -239,6 +241,8 @@ class PixelClient(Client):
         else:  # trigger attack_goal to attack_label
             # logging.debug(f'D String ==> {self.poison_frac=}')
             if math.isclose(self.poison_frac, 1):  # 100% copy poison data
+                # logging.debug(f'BD DEBUG OPTION 1')
+                num = 0
                 bad_data, bad_label = copy.deepcopy(
                         images), copy.deepcopy(labels)
                 
@@ -246,13 +250,18 @@ class PixelClient(Client):
                     # logging.debug(f'D String ==> {type(bad_label[xx])} != {self.attack_goal} = {str(bad_label[xx]) != str(self.attack_goal)}!!')
                     if str(bad_label[xx])!= str(self.attack_goal):  # no in task
                         continue  # jump
-                    
+                    # logging.debug(f'Changing label {str(bad_label[xx])} into {str(self.attack_label)}')
+                    num += 1
                     bad_label[xx] = self.attack_label
                     bad_data[xx] = self.add_trigger(bad_data[xx])
                     images = torch.cat((images, bad_data[xx].unsqueeze(0)), dim=0)
                     labels = torch.cat((labels, bad_label[xx].unsqueeze(0)))
+                # logging.debug(f'BD DEBUG OPTION 1, {num=}')
+                
             else:  # poison_frac% poison data
                 # count label == goal label
+                # logging.debug(f'BD DEBUG OPTION 2')
+
                 num_goal_label = len(labels[labels==self.attack_goal])
                 counter = 0
                 for xx in range(len(images)):
@@ -267,6 +276,7 @@ class PixelClient(Client):
         return images, labels
     
     def save_img(self, image):
+        return
         img = image
         if image.shape[0] == 1:
             pixel_min = torch.min(img)

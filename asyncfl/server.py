@@ -293,6 +293,7 @@ class Server:
         self.network.eval()
         correct = 0
         correct_backdoor = 0
+        back_accu = 0
         back_num = 0
         total = 0
         loss: Any = None
@@ -307,7 +308,6 @@ class Server:
 
         with torch.no_grad():
             for _batch_idx, (inputs, targets) in enumerate(self.test_set):
-                targets_aux = targets.clone().detach().cpu()
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
                 if hidden:
                     hidden = cast(TextLSTM, self.network).detach_hidden(hidden)
@@ -324,31 +324,42 @@ class Server:
 
                 if self.test_backdoor:
                     assert self.backdoor_args 
-                    logging.debug('[SERVER BACKDOOR EVAL].....')
+                    # logging.debug(f'{self.backdoor_args=}')
+                    # logging.debug('[SERVER BACKDOOR EVAL].....')
                     del_arr = []
                     for k, image in enumerate(inputs):
                         # logging.debug(f'{k=}, {len(targets)=}, {len(inputs)=}')
-                        # label_val = int(targets[k].cpu().numpy().tolist())
+                        # label_val = int(targets_aux[k].cpu().numpy().tolist())
+                        label_val = 4
                         # logging.debug(f'{label_val=}')
-                        if test_or_not(self.backdoor_args, targets_aux[k]):  # one2one need test
-                            # data[k][:, 0:5, 0:5] = torch.max(data[k])
-                            # inputs[k] = add_trigger(self.backdoor_args,inputs[k], self.device)
-                            # save_img(inputs[k])
-                            # targets[k] = self.backdoor_args.attack_label
+                        # logging.debug(f'{targets_aux.device=}')
+                        # logging.debug(f'{targets.device=}')
+                        if test_or_not(self.backdoor_args, targets[k]):  # one2one need test
+                            # inputs[k][:, 0:5, 0:5] = torch.max(inputs[k])
+                            inputs[k] = add_trigger(self.backdoor_args,inputs[k], self.device)
+                            save_img(inputs[k])
+                            # logging.debug(f'[BACK DEBUG] changing label from {targets[k]} to { int(self.backdoor_args["attack_label"])}')
+                            targets[k] = int(self.backdoor_args['attack_label'])
                             back_num += 1
                         else:
-                            targets[k] = -1
+                            # logging.debug(f'Keeping the label at {targets[k]}')
+                            pass
+                            targets[k] = int(-1)
                     outputs = self.network(inputs)
-                    loss += self.network.criterion(outputs, targets).item()
-                    _, predicted = torch.max(outputs.data, 1)
-                    correct_backdoor += (predicted == targets).sum().item()
-
+                    # loss += self.network.criterion(outputs, targets).item()
+                    # log_probs = net_g(data)
+                    predicted = outputs.data.max(1, keepdim=True)[1]
+                    # _, predicted = torch.max(outputs.data, 1)
+                    correct_backdoor += predicted.eq(targets.data.view_as(predicted)).long().cpu().sum().item()
+                    # correct_backdoor += (predicted == targets).sum().item()
+        if self.test_backdoor:
+            back_accu = float(correct_backdoor) / back_num
         logging.info(f'Eval --> correct: {correct}, total: {total}')
-        logging.info(f'Eval --> correct_backdoor: {correct_backdoor}, total: {total}')
+        logging.info(f'Eval --> correct_backdoor: {correct_backdoor} ({back_num}), total: {total}')
 
         loss /= total
 
-        return exp(loss) if hidden else 100. * correct / total, loss
+        return exp(loss) if hidden else 100. * correct / total, loss, back_accu
 
     # def create_clients(self, n, config=None):
     #     compute_times = []

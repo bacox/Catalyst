@@ -23,9 +23,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 51: pixel_attack")
+    print("Exp 53: pixel_attack cifar")
 
-    exp_name = "exp51_pixel_attack"
+    exp_name = "exp53_pixel_attack_c10_longer"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -52,16 +52,16 @@ if __name__ == "__main__":
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
-        # model_name = 'cifar10-lenet'
-        # dataset = 'cifar10'
-        model_name = "mnist-cnn"
-        dataset = "mnist"
+        model_name = 'cifar10-lenet'
+        dataset = 'cifar10'
+        # model_name = "mnist-cnn"
+        # dataset = "mnist"
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 10
+        num_rounds = 50
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 5
+        repetitions = 3
         exp_id = 0
         # server_lr = 0.005
         server_lr = 0.1
@@ -96,8 +96,6 @@ if __name__ == "__main__":
         ]
 
         servers = [
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
-
             [
                 AFL.Kardam,
                 {
@@ -124,7 +122,7 @@ if __name__ == "__main__":
                 "semi-async",
             ],
             # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
-            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             # [
             #     AFL.PessimisticServer,
             #     {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
@@ -318,6 +316,7 @@ if __name__ == "__main__":
             byz_type = cfg_data["clients"]["f_type"]
         local_df["f"] = f
         local_df["iterx"] = f'{iterx}'
+
         local_df["byz_type"] = byz_type
         local_df["disable_alpha"] = disable_alpha
         local_df["enable_scaling_factor"] = enable_scaling_factor
@@ -354,6 +353,7 @@ if __name__ == "__main__":
     interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
     aggregation_events_df = pd.concat(aggr_dfs, ignore_index=True)
 
+
     print(server_df.columns)
     for idx, row in server_df[server_df['alg_name'] == 'Kardam'][['round', 'alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
     # for idx, row in server_df.groupby(['alg_name', 'round']).median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
@@ -370,10 +370,10 @@ if __name__ == "__main__":
         plt.savefig(f'backdoor-{alg_i}.png')
 
 
-    print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].to_latex())
-
-    print(server_df.groupby(['alg_name']).max())
+    print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').mean().reset_index())
     exit()
+
+
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
     fig_size = (12, 6)
 

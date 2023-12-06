@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -7,17 +8,18 @@ import cv2
 from skimage import img_as_ubyte
 import numpy as np
 
-def test_or_not(args, label: int):
+def test_or_not(args, label: torch.tensor):
     # return True
     # print(f'{label.item()}, {type(args["attack_goal"])=}')
+    label_val = label.item()
     if args['attack_goal'] != -1:  # one to one
-        # if label_val == int(args['attack_goal']):  # only attack goal join
-        if label.item():  # only attack goal join
+        if label_val == int(args['attack_goal']):  # only attack goal join
+        # if label > 0:  # only attack goal join
             return True
         else:
             return False
     else:  # all to one
-        return True
+        # return True
         if label.item() != int(args['attack_label']):
             return True
         else:
@@ -25,6 +27,7 @@ def test_or_not(args, label: int):
 
 def add_trigger(args, image, device):
         if args['trigger'] == 'dba':
+            logging.debug('DBA shortcut')
             pixel_max = 1
             image[:,args['triggerY']+0:args['triggerY']+2,args['triggerX']+0:args['triggerX']+2] = pixel_max
             image[:,args['triggerY']+0:args['triggerY']+2,args['triggerX']+2:args['triggerX']+5] = pixel_max
@@ -34,8 +37,9 @@ def add_trigger(args, image, device):
             return image
         if args['trigger'] == 'square':
             pixel_max = torch.max(image) if torch.max(image)>1 else 1
-            
+            # logging.debug(f"Pixel loc is {[args['triggerY'],args['triggerY']+5,args['triggerX'],args['triggerX']+5]}")
             image[:,args['triggerY']:args['triggerY']+5,args['triggerX']:args['triggerX']+5] = pixel_max
+            
         elif args['trigger'] == 'pattern':
             pixel_max = torch.max(image) if torch.max(image)>1 else 1
             image[:,args['triggerY']+0,args['triggerX']+0] = pixel_max
@@ -70,6 +74,7 @@ def add_trigger(args, image, device):
             image[image>max_pixel]=max_pixel
         return image
 def save_img(image):
+        return
         img = image
         if image.shape[0] == 1:
             pixel_min = torch.min(img)

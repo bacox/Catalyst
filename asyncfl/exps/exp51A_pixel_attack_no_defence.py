@@ -23,9 +23,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 51: pixel_attack")
+    print("Exp 51A: pixel_attack")
 
-    exp_name = "exp51_pixel_attack"
+    exp_name = "exp51A_pixel_attack_no_defence"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 1
+        pool_size = 6
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -71,28 +71,28 @@ if __name__ == "__main__":
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
+            {"num_clients": 10, "num_byz_nodes": 0, "flame_hist": 3},
         ]
 
         attacks = [
-            # [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
-            [
-                AFL.PixelClient,
-                {
-                    "sampler": "uniform",
-                    "sampler_args": {},
-                    "backdoor_args": {
-                        "attack_label": 1,
-                        "attack_goal": 3,
-                        "attack": "dba",
-                        "trigger": "pattern",
-                        "triggerX": 22,
-                        "triggerY": 22,
-                        # "poison_frac": 0.2,
-                        "poison_frac": 1.0,
-                    },
-                },
-            ],
+            [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
+            # [
+            #     AFL.PixelClient,
+            #     {
+            #         "sampler": "uniform",
+            #         "sampler_args": {},
+            #         "backdoor_args": {
+            #             "attack_label": 1,
+            #             "attack_goal": 3,
+            #             "attack": "dba",
+            #             "trigger": "pattern",
+            #             "triggerX": 22,
+            #             "triggerY": 22,
+            #             # "poison_frac": 0.2,
+            #             "poison_frac": 1.0,
+            #         },
+            #     },
+            # ],
         ]
 
         servers = [
@@ -119,7 +119,7 @@ if __name__ == "__main__":
                     "disable_alpha": False,
                     "impact_delayed": 1.0,
                     "enable_scaling_factor": False,
-                    "aggregation_bound": 10,
+                    "aggregation_bound": 3,
                 },
                 "semi-async",
             ],
@@ -370,9 +370,7 @@ if __name__ == "__main__":
         plt.savefig(f'backdoor-{alg_i}.png')
 
 
-    print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].to_latex())
-
-    print(server_df.groupby(['alg_name']).max())
+    print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').median().reset_index().to_latex())
     exit()
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
     fig_size = (12, 6)

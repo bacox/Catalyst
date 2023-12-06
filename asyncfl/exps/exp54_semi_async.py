@@ -23,9 +23,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 51: pixel_attack")
+    print("Exp 54: Semi Aync")
 
-    exp_name = "exp51_pixel_attack"
+    exp_name = "exp54_semi_async"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 1
+        pool_size = 6
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -59,72 +59,70 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 10
+        num_rounds = 4
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 5
+        repetitions = 3
         exp_id = 0
         # server_lr = 0.005
         server_lr = 0.1
         # num_clients = 50
         # num_clients = 10
-
+        ff = 10
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
+            # {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
         ]
 
         attacks = [
-            # [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
-            [
-                AFL.PixelClient,
-                {
-                    "sampler": "uniform",
-                    "sampler_args": {},
-                    "backdoor_args": {
-                        "attack_label": 1,
-                        "attack_goal": 3,
-                        "attack": "dba",
-                        "trigger": "pattern",
-                        "triggerX": 22,
-                        "triggerY": 22,
-                        # "poison_frac": 0.2,
-                        "poison_frac": 1.0,
-                    },
-                },
-            ],
+            [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
+            # [
+            #     AFL.PixelClient,
+            #     {
+            #         "sampler": "uniform",
+            #         "sampler_args": {},
+            #         "backdoor_args": {
+            #             "attack_label": 1,
+            #             "attack_goal": 3,
+            #             "attack": "dba",
+            #             "trigger": "pattern",
+            #             "triggerX": 22,
+            #             "triggerY": 22,
+            #             # "poison_frac": 0.2,
+            #             "poison_frac": 1.0,
+            #         },
+            #     },
+            # ],
         ]
 
         servers = [
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
-
-            [
-                AFL.Kardam,
-                {
-                    "learning_rate": server_lr,
-                    "damp_alpha": 0.1,
-                    "use_fedasync_alpha": False,
-                    "use_fedasync_aggr": True,
-                    "use_lipschitz_server_approx": False,
-                },
-                'semi-async'
-            ],
+            # [
+            #     AFL.Kardam,
+            #     {
+            #         "learning_rate": server_lr,
+            #         "damp_alpha": 0.1,
+            #         "use_fedasync_alpha": False,
+            #         "use_fedasync_aggr": True,
+            #         "use_lipschitz_server_approx": False,
+            #     },
+            #     'semi-async'
+            # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
-            [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
+            # [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             [
                 AFL.PessimisticServer,
                 {
                     "learning_rate": server_lr,
-                    "k": 6,
+                    "k": 600,
                     "disable_alpha": False,
                     "impact_delayed": 1.0,
                     "enable_scaling_factor": False,
-                    "aggregation_bound": 10,
+                    "aggregation_bound": 2*ff+1,
                 },
                 "semi-async",
             ],
             # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
-            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             # [
             #     AFL.PessimisticServer,
             #     {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
@@ -136,7 +134,7 @@ if __name__ == "__main__":
             # # [AFL.FedAsync,{'learning_rate': 0.01},],
             # # [AFL.FedWait,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
-            [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 9, 'aggr_mode': 'median'},'semi-async'],
+            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 9, 'aggr_mode': 'median'},'semi-async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'median'},'semi-async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15},'async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'trmean'},'async'],
@@ -150,10 +148,16 @@ if __name__ == "__main__":
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
             num_clients, f, fh = var_set.values()
             ct_key = f"{num_clients}-{f}-{fh}-{_r}"
+            f = ff
             # print(n, f, fh)
             # ct_key = f'{num_clients}-{f}'
             if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(1000, 5, num_clients - f))
+                f2 = 2*f
+                ct_f2 = np.abs(np.random.normal(400, 5, f*2))
+                ct_rest = np.abs(np.random.normal(600, 5, num_clients - 2*f))
+                ct_clients = np.concatenate((ct_f2, ct_rest), axis=0)
+                assert len(ct_clients) == num_clients
+                # ct_clients = np.abs(np.random.normal(1000, 5, num_clients - f))
                 f_ct = np.abs(np.random.normal(1000, 5, f))
                 generated_ct[ct_key] = [ct_clients, f_ct]
             ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
@@ -203,7 +207,7 @@ if __name__ == "__main__":
                         "client_args": {"learning_rate": server_lr, "sampler": "uniform", "sampler_args": {}},
                         "client_ct": ct_clients,
                         "n": num_clients,
-                        "f": f,
+                        "f": ff,
                         # 'f': f,
                         "f_type": atk[0],
                         "f_args": atk[1],
@@ -318,6 +322,7 @@ if __name__ == "__main__":
             byz_type = cfg_data["clients"]["f_type"]
         local_df["f"] = f
         local_df["iterx"] = f'{iterx}'
+
         local_df["byz_type"] = byz_type
         local_df["disable_alpha"] = disable_alpha
         local_df["enable_scaling_factor"] = enable_scaling_factor
@@ -354,26 +359,27 @@ if __name__ == "__main__":
     interaction_events_df = pd.concat(interaction_dfs, ignore_index=True)
     aggregation_events_df = pd.concat(aggr_dfs, ignore_index=True)
 
-    print(server_df.columns)
-    for idx, row in server_df[server_df['alg_name'] == 'Kardam'][['round', 'alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
-    # for idx, row in server_df.groupby(['alg_name', 'round']).median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
-        print(row.values)
 
-    print(server_df[server_df['alg_name'] == 'Kardam'].max())
+    # print(server_df.columns)
+    # for idx, row in server_df[server_df['alg_name'] == 'Kardam'][['round', 'alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
+    # # for idx, row in server_df.groupby(['alg_name', 'round']).median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
+    #     print(row.values)
+
+    # print(server_df[server_df['alg_name'] == 'Kardam'].max())
+    # # exit()
+    # algs = list(server_df['alg_name'].unique())
+    # for alg_i in algs:
+    #     plt.figure(figsize=(24,16))
+
+    #     sns.lineplot(data=server_df[server_df['alg_name'] == alg_i], x='round', y='backdoor_accuracy', hue='iterx')
+
+    #     plt.savefig(f'backdoor-{alg_i}.png')
+
+
+    # print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').mean().reset_index())
     # exit()
-    algs = list(server_df['alg_name'].unique())
-    for alg_i in algs:
-        plt.figure(figsize=(24,16))
-
-        sns.lineplot(data=server_df[server_df['alg_name'] == alg_i], x='round', y='backdoor_accuracy', hue='iterx')
-
-        plt.savefig(f'backdoor-{alg_i}.png')
 
 
-    print(server_df.groupby(['iterx']).max().reset_index().groupby('alg_name').median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].to_latex())
-
-    print(server_df.groupby(['alg_name']).max())
-    exit()
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
     fig_size = (12, 6)
 
