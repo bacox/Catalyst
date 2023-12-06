@@ -10,8 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-
-SEED=42
+SEED = 42
 
 @dataclass(frozen=True)
 class ResultDataFrames:
@@ -156,7 +155,7 @@ def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
 
 def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
     sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
-    fig_size = (12, 6)
+    fig_size = (8, 6)
 
     df = res_dfs.server_df.copy()
     df["alg"] = df["alg"].str.split().str[0]
@@ -166,14 +165,16 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
     if is_one_scale:
         x = "Total clients"
         df = df.rename(columns={"n": x})
+        formatter = None
     else:
         x = "Byzantine clients"
-        df[x] = (df["f"] * 100 // df["n"]).astype(str) + "%"
+        df[x] = (df["f"] * 100 // df["n"])
+        formatter = lambda x: f"{x}%"
 
     graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
     print(f"Generating plot: {graph_file}")
-    plt.figure()
-    g = sns.barplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED)
+    plt.figure(figsize=fig_size)
+    g = sns.barplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
     # g.set_ylim((75, 100))
     g.get_legend().set_title(None)
     plt.savefig(graph_file, bbox_inches="tight")
