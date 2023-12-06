@@ -189,7 +189,7 @@ def main() -> None:
 
     (graphs_path := Path("graphs") / args.exp_name).mkdir(exist_ok=True, parents=True)
 
-    res_dfs= prepare_dfs(Path(".data") / f"{args.exp_name}.json")
+    res_dfs = prepare_dfs(Path(".data") / f"{args.exp_name}.json")
 
     if args.w:
         plot_wtime(res_dfs, graphs_path, args.exp_name)
