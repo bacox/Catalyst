@@ -183,7 +183,7 @@ if __name__ == "__main__":
             elif server_name == "PessimisticServer":
                 server_name = f"Catalyst (k={server_args['k']}, b={server_args['aggregation_bound']}, d={server_args['impact_delayed']})"
             elif server_name == "SemiAsync":
-                server_name = f" Semi-Synchronous (k={server_args['k']}, b={server_args['aggregation_bound']})"
+                server_name = f"Semi-Synchronous (k={server_args['k']}, b={server_args['aggregation_bound']})"
 
             attack_name = atk[0].__name__
             if f < 1:
