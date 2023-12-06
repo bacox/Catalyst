@@ -117,6 +117,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
 
 def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
     name_to_vals = defaultdict(list)
+    incomplete_keys = set()
     groubpy = res_dfs.server_df.groupby(["byz_type", "alg", "exp_id"], as_index=False, sort=False)
 
     for (byz_type, alg, _exp_id), s_df in groubpy:
@@ -125,9 +126,13 @@ def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
         k = f"{alg} | {byz_type}"
         filtered = merged[merged["Wall Time"] >= timestamp]
         if filtered.empty:
-            name_to_vals[k].append(merged[res_dfs.metric].ffill().iloc[-1])  # TODO consider other options
+            # name_to_vals[k].append(merged[res_dfs.metric].ffill().iloc[-1])
+            incomplete_keys.add(k)
+            metric_col = merged[res_dfs.metric]
+            name_to_vals[k].append(
+                metric_col.max() if res_dfs.metric == "Accuracy" else metric_col.min())
         else:
-            name_to_vals[k].append(filtered[res_dfs.metric].iloc[0])  # assumes timestamps were sorted
+            name_to_vals[k].append(filtered[res_dfs.metric].iloc[0])  # assumes sorting by timestamp
 
     # for k, v in name_to_vals.items():
     #     print(k, v)
@@ -144,7 +149,7 @@ def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
     name_to_acc_sdev = {k: round(v, 1) for k, v in name_to_acc_sdev.items()}
 
     for k in name_to_vals:
-        print(k, name_to_acc_mean[k], name_to_acc_sdev[k])
+        print(k, name_to_acc_mean[k], name_to_acc_sdev[k], "*" if k in incomplete_keys else "")
 
 
 def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
