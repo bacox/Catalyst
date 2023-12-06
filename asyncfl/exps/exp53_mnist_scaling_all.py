@@ -91,7 +91,7 @@ if __name__ == "__main__":
         client_args = {
             "learning_rate": lr_all,
             "sampler": "limitlabel",
-            "sampler_args": (7, 42)
+            "sampler_args": lambda seed: (7, 42 + seed)
         }
 
         attacks = [
@@ -210,6 +210,10 @@ if __name__ == "__main__":
             if server[2] != "semi-async":
                 rounds = num_rounds * num_clients
 
+            ca = client_args.copy()
+            if callable(ca["sampler_args"]):
+                ca["sampler_args"] = ca["sampler_args"](_r)
+
             configs.append(
                 {
                     "exp_id": exp_id,
@@ -221,7 +225,7 @@ if __name__ == "__main__":
                     "eval_interval": 5,
                     "clients": {
                         "client": AFL.Client,
-                        "client_args": client_args,
+                        "client_args": ca,
                         "client_ct": ct_clients,
                         "n": num_clients,
                         "f": f,
