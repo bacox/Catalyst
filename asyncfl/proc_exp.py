@@ -11,6 +11,8 @@ import pandas as pd
 import seaborn as sns
 
 
+SEED=42
+
 @dataclass(frozen=True)
 class ResultDataFrames:
     server_df: pd.DataFrame
@@ -89,7 +91,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
         graph_file = graphs_path / f"{fname_prefix}_rounds.png"
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=s_df, x="Round", y=res_dfs.metric, hue="alg")
+        g = sns.lineplot(data=s_df, x="Round", y=res_dfs.metric, hue="alg", seed=SEED)
         if res_dfs.metric == "Perplexity":
             g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
@@ -101,7 +103,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
         graph_file = graphs_path / f"{fname_prefix}_walltime.png"
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=merged, x="Wall Time", y=res_dfs.metric, hue="alg")
+        g = sns.lineplot(data=merged, x="Wall Time", y=res_dfs.metric, hue="alg", seed=SEED)
         if res_dfs.metric == "Perplexity":
             g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
@@ -159,13 +161,20 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
     df = res_dfs.server_df.copy()
     df["alg"] = df["alg"].str.split().str[0]
     df = df.groupby(["name", "exp_id"], as_index=False).max()
-    scale_count = (df["n"] / df["f"]).nunique()
-    is_one_scale = scale_count == 1
+    is_one_scale = (df["n"] / df["f"]).nunique() == 1
+
+    if is_one_scale:
+        x = "Total clients"
+        df = df.rename(columns={"n": x})
+    else:
+        x = "Byzantine clients"
+        df[x] = (df["f"] * 100 // df["n"]).astype(str) + "%"
 
     graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
     print(f"Generating plot: {graph_file}")
     plt.figure()
-    g = sns.lineplot(data=df, x="n" if is_one_scale else "f", y="Accuracy", hue="alg")
+    g = sns.barplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED)
+    # g.set_ylim((75, 100))
     g.get_legend().set_title(None)
     plt.savefig(graph_file, bbox_inches="tight")
 

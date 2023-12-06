@@ -37,33 +37,53 @@ if __name__ == "__main__":
 
         var_sets = [
             {
-                "num_clients": 50,
+                "num_clients": 60,
+                "num_byz_nodes": 0,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 60,
+                "num_byz_nodes": 3,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 60,
                 "num_byz_nodes": 6,
                 "ct_skew": 20
             },
             {
-                "num_clients": 50,
-                "num_byz_nodes": 10,
+                "num_clients": 60,
+                "num_byz_nodes": 9,
                 "ct_skew": 20
             },
             {
-                "num_clients": 50,
-                "num_byz_nodes": 13,
+                "num_clients": 60,
+                "num_byz_nodes": 12,
                 "ct_skew": 20
             },
             {
-                "num_clients": 50,
-                "num_byz_nodes": 17,
+                "num_clients": 60,
+                "num_byz_nodes": 15,
                 "ct_skew": 20
             },
             {
-                "num_clients": 50,
-                "num_byz_nodes": 20,
+                "num_clients": 60,
+                "num_byz_nodes": 18,
                 "ct_skew": 20
             },
             {
-                "num_clients": 50,
+                "num_clients": 60,
+                "num_byz_nodes": 21,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 60,
                 "num_byz_nodes": 24,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 60,
+                "num_byz_nodes": 27,
                 "ct_skew": 20
             },
         ]
@@ -92,6 +112,25 @@ if __name__ == "__main__":
         ]
 
         servers = [
+            # [
+            #     AFL.FedAsync,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "mitigate_staleness": True
+            #     },
+            #     "async"
+            # ],
+            [
+                AFL.Kardam,
+                {
+                    "learning_rate": lr_all,
+                    "damp_alpha": 0.1,
+                    "use_fedasync_alpha": False,
+                    "use_fedasync_aggr": True,
+                    "use_lipschitz_server_approx": False
+                },
+                "async"
+            ],
             [
                 AFL.BASGD,
                 {

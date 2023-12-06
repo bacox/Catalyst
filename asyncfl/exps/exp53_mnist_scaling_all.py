@@ -42,6 +42,11 @@ if __name__ == "__main__":
                 "ct_skew": 20
             },
             {
+                "num_clients": 20,
+                "num_byz_nodes": 6,
+                "ct_skew": 20
+            },
+            {
                 "num_clients": 30,
                 "num_byz_nodes": 9,
                 "ct_skew": 20
@@ -49,6 +54,11 @@ if __name__ == "__main__":
             {
                 "num_clients": 40,
                 "num_byz_nodes": 12,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 50,
+                "num_byz_nodes": 15,
                 "ct_skew": 20
             },
             {
@@ -62,8 +72,18 @@ if __name__ == "__main__":
                 "ct_skew": 20
             },
             {
+                "num_clients": 80,
+                "num_byz_nodes": 24,
+                "ct_skew": 20
+            },
+            {
                 "num_clients": 90,
                 "num_byz_nodes": 27,
+                "ct_skew": 20
+            },
+            {
+                "num_clients": 100,
+                "num_byz_nodes": 30,
                 "ct_skew": 20
             },
         ]
@@ -92,6 +112,25 @@ if __name__ == "__main__":
         ]
 
         servers = [
+            # [
+            #     AFL.FedAsync,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "mitigate_staleness": True
+            #     },
+            #     "async"
+            # ],
+            [
+                AFL.Kardam,
+                {
+                    "learning_rate": lr_all,
+                    "damp_alpha": 0.1,
+                    "use_fedasync_alpha": False,
+                    "use_fedasync_aggr": True,
+                    "use_lipschitz_server_approx": False
+                },
+                "async"
+            ],
             [
                 AFL.BASGD,
                 {
