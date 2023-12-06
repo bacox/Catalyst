@@ -174,8 +174,7 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
     graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
     print(f"Generating plot: {graph_file}")
     plt.figure(figsize=fig_size)
-    g = sns.barplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
-    # g.set_ylim((75, 100))
+    g = sns.pointplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
     g.get_legend().set_title(None)
     plt.savefig(graph_file, bbox_inches="tight")
 
