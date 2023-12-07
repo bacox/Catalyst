@@ -187,9 +187,27 @@ def main() -> None:
     parser.add_argument("-c", help="Client plots", action="store_true")
     args = parser.parse_args()
 
+    args.exp_name = "exp51_cifar10_nc"
+
     (graphs_path := Path("graphs") / args.exp_name).mkdir(exist_ok=True, parents=True)
 
-    res_dfs = prepare_dfs(Path(".data") / f"{args.exp_name}.json")
+    res_dfs1 = prepare_dfs(Path(".data") / f"exp51_cifar10.json")
+    res_dfs2 = prepare_dfs(Path(".data") / f"exp51_cifar10_nc.json")
+
+    print(len(res_dfs1.server_df[res_dfs1.server_df.name == "Catalyst (k=5, b=2, d=1.0)_semi-async_None_f0_n40_lr0.25_cifar10-resnet18"]))
+
+    sdf = res_dfs1.server_df[res_dfs1.server_df.name != "Catalyst (k=5, b=2, d=1.0)_semi-async_None_f0_n40_lr0.25_cifar10-resnet18"]
+    iedf = res_dfs1.interaction_events_df[res_dfs1.interaction_events_df.name != "Catalyst (k=5, b=2, d=1.0)_semi-async_None_f0_n40_lr0.25_cifar10-resnet18"]
+    cddf = res_dfs1.client_dist_df[res_dfs1.client_dist_df.name != "Catalyst (k=5, b=2, d=1.0)_semi-async_None_f0_n40_lr0.25_cifar10-resnet18"]
+
+    # print(len(res_dfs2.server_df[res_dfs2.server_df.name == "Catalyst (k=5, b=2, d=1.0)_semi-async_None_f0_n40_lr0.1_cifar10-resnet18"]))
+
+    print(len(sdf))
+    sdf = pd.concat([sdf, res_dfs2.server_df], ignore_index=True)
+    iedf = pd.concat([iedf, res_dfs2.interaction_events_df], ignore_index=True)
+    cddf = pd.concat([cddf, res_dfs2.client_dist_df], ignore_index=True)
+
+    res_dfs = ResultDataFrames(sdf, iedf, cddf, "Accuracy")
 
     if args.w:
         plot_wtime(res_dfs, graphs_path, args.exp_name)
