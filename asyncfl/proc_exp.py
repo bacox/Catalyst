@@ -74,7 +74,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
     # for idx, row in interaction_events_df.iterrows():
     #     print(row)
 
-    # graph_file = graphs_path / f"{exp_name}_walltime.png"
+    # graph_file = graphs_path / f"{exp_name}_walltime.pdf"
     # plt.figure()
     # sns.lineplot(data=res_dfs.interaction_events_df, x="Wall Time", y="Round", hue="alg")
     # print(f"Saving figure at {graph_file}")
@@ -86,11 +86,12 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
         byz_type_norm = byz_type.translate(
             str.maketrans({" ": "", "\N{GREEK SMALL LETTER ALPHA}": "a"}))
         fname_prefix = f"{exp_name}_{byz_type_norm}_f{f}_n{n}"
+        s_df["sv"] = s_df["alg"].str.split().str.get(0)
 
         graph_file = graphs_path / f"{fname_prefix}_rounds.png"
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=s_df, x="Round", y=res_dfs.metric, hue="alg", seed=SEED)
+        g = sns.lineplot(data=s_df, x="Round", y=res_dfs.metric, hue="sv", seed=SEED)
         if res_dfs.metric == "Perplexity":
             g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
@@ -99,17 +100,17 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
         merge_on = ["Round", "name", "alg", "exp_id"]
         merged = pd.merge(left=s_df, right=res_dfs.interaction_events_df, on=merge_on, how="left")
 
-        graph_file = graphs_path / f"{fname_prefix}_walltime.png"
+        graph_file = graphs_path / f"{fname_prefix}_walltime.pdf"
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
-        g = sns.lineplot(data=merged, x="Wall Time", y=res_dfs.metric, hue="alg", seed=SEED)
+        g = sns.lineplot(data=merged, x="Wall Time", y=res_dfs.metric, hue="sv", seed=SEED)
         if res_dfs.metric == "Perplexity":
             g.set_ylim((0, 25000))
         g.get_legend().set_title(None)
         plt.savefig(graph_file, bbox_inches="tight")
 
     # plt.figure()
-    # graph_file = graphs_path / f"{exp_name}_client_kde.png"
+    # graph_file = graphs_path / f"{exp_name}_client_kde.pdf"
     # sns.kdeplot(data=res_dfs.client_dist_df, x="ct", hue="name")
     # plt.title("Compute kde")
     # print(f"Saving figure at {graph_file}")
@@ -171,7 +172,7 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
         df[x] = (df["f"] * 100 // df["n"])
         formatter = lambda x: f"{x}%"
 
-    graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
+    graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.pdf"
     print(f"Generating plot: {graph_file}")
     plt.figure(figsize=fig_size)
     g = sns.pointplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
