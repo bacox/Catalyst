@@ -33,8 +33,8 @@ class Buckets():
 class SemiAsync(Server):
 
     # Server age is already present in Server
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005,backdoor_args = {}, k: int = 5, aggregation_bound: Union[int, None] = None, disable_alpha: bool = False) -> None:
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args)
 
         self.idle_clients = []
         self.clipbounds = {} # S
@@ -88,6 +88,20 @@ class SemiAsync(Server):
                 from_k = max(self.age - self.k + 1, 0)
                 to_k = max(self.age, 0) # Change to make it work with range
                 W_i = [] # Store delayed aggregate and number of used weights
+
+                # Recal fast clients?
+                logging.debug(f'Recalling fast clients: {list(set(self.fast_clients))}')
+                # logging.debug(f'{self.sched_ctx.clients_adm["computing"]}')
+                for cc in [x for x in self.sched_ctx.clients_adm['computing'] if x[2]]:
+                    proportional_train_time = min((self.sched_ctx.wall_time - cc[3])/ cc[0], 1)
+                    self.sched_ctx.client_partial_training(cc[2], proportional_train_time)
+                    # client_i: Client = 
+                    self.sched_ctx.move_client_to_idle_mode(cc[2]) #type:ignore
+
+                    # Put data in bucket 
+
+                    # Move client to computing
+                # logging.debug([(x[1].pid, x[3]) for x in self.sched_ctx.clients_adm['computing'] if x[1].pid in list(set(self.fast_clients))])
 
                 # Loop over older delayed updates
                 for i in range(from_k, to_k-1):
@@ -165,7 +179,7 @@ class SemiAsync(Server):
                 current_bucket_model = bucket.get_next_model()
                 alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, current_bucket_model, self.learning_rate)
                 self.sched_ctx.send_model_to_client(client_id, alpha_averaged, self.age)
-                self.sched_ctx.move_client_to_compute_mode(client_id)
+                self.sched_ctx.move_client_to_compute_mode(client_id, partial=True)
                 logging.info(f'Client {client_id} will be a FAST client')
                 self.fast_clients.append(client_id)
                 return None, has_aggregated
@@ -173,7 +187,7 @@ class SemiAsync(Server):
                 # # Add to idle clients
                 # self.idle_clients.append(client_id)
                 # self.sched_ctx.move_client_to_idle_mode(client_id) #type:ignore
-                # return
+                # return None, has_aggregated
         else:
             if self.age - self.k <  gradient_age < self.age - 1:
                 self.pending[gradient_age][client_id] = weight_vec            

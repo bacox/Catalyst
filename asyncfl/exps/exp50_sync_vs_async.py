@@ -1,9 +1,6 @@
 import copy
 from pathlib import Path
 from pprint import PrettyPrinter
-from asyncfl.dataloader import load_mnist
-
-# from asyncfl.pixel_client import LocalMaliciousUpdate
 
 pp = PrettyPrinter(indent=4)
 import numpy as np
@@ -23,9 +20,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 52: Client ct skewness")
+    print("Exp 50: Sync vs Async")
 
-    exp_name = "exp52_client_ct_skew"
+    exp_name = "exp50_sync_vs_async"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -52,34 +49,30 @@ if __name__ == "__main__":
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
-        model_name = 'cifar10-lenet'
-        dataset = 'cifar10'
-        # model_name = "mnist-cnn"
-        # dataset = "mnist"
+        # model_name = 'cifar10-lenet'
+        # dataset = 'cifar10'
+        # model_name = "cifar10-resnet18"
+        # dataset = "cifar10"
+
+        model_name = "mnist-cnn"
+        dataset = "mnist"
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 15
+        num_rounds = 10
         idx = 1 # Most likely should not be changed in most cases
         repetitions = 3
         exp_id = 0
         # server_lr = 0.005
-        server_lr = 0.1
+        server_lr = 0.2
+        # server_lr = 0.5
         # num_clients = 50
         # num_clients = 10
 
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 25},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 50},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 75},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 100},
-            # {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 125},
-            # {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 150},
-            # {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 175},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 200},
-            {"num_clients": 100, "num_byz_nodes": 0, "flame_hist": 3, 'ct_skew': 300},
+            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
         ]
 
         attacks = [
@@ -101,8 +94,7 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync,{'learning_rate': server_lr},'semi-async'],
-            # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False, "aggregation_bound": 100}, 'semi-async'],
-            [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False, "aggregation_bound": 100}, 'sync'],
+            # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False, "aggregation_bound": 40}, 'semi-async'],
             # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
 
             # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
@@ -116,7 +108,9 @@ if __name__ == "__main__":
             # # [AFL.FedAsync,{'learning_rate': 0.05},],
             # # [AFL.FedAsync,{'learning_rate': 0.01},],
             # # [AFL.FedWait,{'learning_rate': server_lr}],
-            # # [AFL.Server,{'learning_rate': server_lr}],
+            # [AFL.FedAsync,{'learning_rate': server_lr}, 'async'],
+            [AFL.FedAsync,{'learning_rate': server_lr}, 'semi-async'],
+            [AFL.Server,{'learning_rate': server_lr}, 'sync'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'median'},'semi-async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'median'},'semi-async'],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15},'async'],
@@ -130,13 +124,13 @@ if __name__ == "__main__":
 
         
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
-            num_clients, f, fh, ct_skew = var_set.values()
-            ct_key = f"{num_clients}-{f}-{fh}-{_r}-{ct_skew}"
+            num_clients, f, fh = var_set.values()
+            ct_key = f"{num_clients}-{f}-{fh}-{_r}"
             # print(n, f, fh)
             # ct_key = f'{num_clients}-{f}'
             if ct_key not in generated_ct.keys():
-                ct_clients = np.abs(np.random.normal(500, ct_skew, num_clients - f))
-                f_ct = np.abs(np.random.normal(500, ct_skew, f))
+                ct_clients = np.abs(np.random.normal(10000, 2000.0, num_clients - f))
+                f_ct = np.abs(np.random.normal(10000, 2000.0, f))
                 generated_ct[ct_key] = [ct_clients, f_ct]
             ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
             print(max(ct_clients))
@@ -174,14 +168,12 @@ if __name__ == "__main__":
             configs.append(
                 {
                     "exp_id": exp_id,
-                    'replication_id': _r,
                     "aggregation_type": server[2],
-                    "ct_skew": ct_skew,
-                    "client_participartion": 0.2,
+                    "client_participartion": 1,
                     "name": f"{server_name}-async-{key_name}",
                     "num_rounds": rounds,
                     "client_batch_size": -1,
-                    "eval_interval": 1,
+                    "eval_interval": 5,
                     "clients": {
                         "client": AFL.Client,
                         "client_args": {"learning_rate": server_lr, 'sampler': 'uniform',
@@ -218,10 +210,6 @@ if __name__ == "__main__":
 
         # plt.show()
         # exit()
-        # print(configs)
-        # for cfg in configs:
-        #     print(max(cfg['clients']['client_ct']))
-        # exit()
         outputs = AFL.Scheduler.run_multiple(
             configs,
             pool_size=pool_size,
@@ -255,7 +243,6 @@ if __name__ == "__main__":
     # learning_rate
     # damp_alpha
     for running_stats, cfg_data in outputs2:
-        ct_skew = f"{cfg_data['ct_skew'] / 25}x"
         name = cfg_data["name"]
         min_cluster_size = 0
         if "min_cluster_size" in cfg_data["server_args"]:
@@ -263,14 +250,24 @@ if __name__ == "__main__":
         interaction_events = running_stats[3]
         ie_df = pd.DataFrame(interaction_events, columns=["client_id", "wall_time", "min_ct", "client_ct"])
         ie_df["alg"] = name
-        ie_df["ct_skew"] = ct_skew
         ie_df["round"] = ie_df.index
+
+        if(cfg_data['aggregation_type'] == 'sync'):
+            ie_df['wall_time'] = ie_df['wall_time'].apply(lambda x: x*2.5)
+            # exit()
+
         interaction_dfs.append(ie_df)
-        local_df = pd.DataFrame(running_stats[0], columns=["round", "accuracy", "loss"])
+        # if len(running_stats[0]) < 4:
+        #     print('Adjusting columns')
+        #     # print(running_stats[0][0].append(0))
+        #     # running_stats[0] = list(map(lambda x:[*x, 0], running_stats[0]))
+        #     for item in running_stats[0]:
+        #         item.append(0) 
+        #     print(f'{len(running_stats[0])=}')
+        local_df = pd.DataFrame(running_stats[0], columns=["round", "accuracy", "loss", "backdoor_accuracy"])
         parts = name.split("-")[-1].split("_")
         agg_local_df = pd.DataFrame(running_stats[4], columns=['round', 'wall-time'])
         agg_local_df["idx"] = agg_local_df.index
-        
         # print(parts)
         # pp.pprint(cfg_data)
 
@@ -313,16 +310,15 @@ if __name__ == "__main__":
         local_df["enable_scaling_factor"] = enable_scaling_factor
         local_df["num_clients"] = num_clients
         local_df["impact_delayed"] = impact_delayed
+        local_df['agg_type'] = cfg_data['aggregation_type']
+
         local_df["alg_name"] = parts[-2]
-        local_df["ct_skew"] = ct_skew
-        agg_local_df["ct_skew"] = ct_skew
         # local_df['use_lipschitz_server_approx'] = cfg_data['server_args']['use_lipschitz_server_approx']
-        local_df_name = f"{parts[-2]}-f{f}-id{impact_delayed}-esf{int(enable_scaling_factor)}-{name_suffix}"
+        local_df_name = f"{parts[-2]}-f{f}-{cfg_data['aggregation_type']}"
         # print(local_df_name, parts)
         local_df["name"] = local_df_name
         ie_df["name"] = local_df_name
         agg_local_df['name'] = local_df_name
-        # print(cfg_data['replication_id'])
 
 
         ct = [[x, name, "clients", local_df_name] for x in cfg_data["clients"]["client_ct"]]
@@ -332,6 +328,8 @@ if __name__ == "__main__":
         aggr_dfs.append(agg_local_df)
 
         dfs.append(local_df)
+    # exit()
+
     # pp.pprint(cfg_data)
     # print(num_byz_nodes)
     # exit()
@@ -364,18 +362,19 @@ if __name__ == "__main__":
     aggregation_events_df = aggregation_events_df.groupby(['name', 'idx']).mean().reset_index()
     
     print(aggregation_events_df.groupby('name').count())
-    print(server_df['ct_skew'].unique())
+
     # plt.figure()
     # graph_file = graphs_path / f"{exp_name}_aggregation_stats.png"
     # print(f"Generating plot: {graph_file}")
-    # g = sns.lineplot(data=aggregation_events_df, x='idx', y='round', hue='ct_skew', style="ct_skew",
+    # g = sns.lineplot(data=aggregation_events_df, x='idx', y='round', hue='name', style="name",
     # markers=True, dashes=False)
     # plt.savefig(graph_file)
+
     # print(aggregation_events_df.columns)
     # plt.figure()
     # graph_file = graphs_path / f"{exp_name}_aggregation_stats_wall_time.png"
     # print(f"Generating plot: {graph_file}")
-    # g = sns.lineplot(data=aggregation_events_df, x='wall-time', y='round', hue='ct_skew', style="ct_skew",
+    # g = sns.lineplot(data=aggregation_events_df, x='wall-time', y='round', hue='name', style="name",
     # markers=True, dashes=False)
     # plt.savefig(graph_file)
 
@@ -387,49 +386,50 @@ if __name__ == "__main__":
         local_df = s_df
         if len(local_df):
             plt.figure(figsize=fig_size)
-            g = sns.lineplot(data=local_df, x="round", y="accuracy", hue="ct_skew")
+            g = sns.lineplot(data=local_df, x="round", y="accuracy", hue="name")
             # g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
             # g.map(sns.lineplot, "round", "accuracy")
             # g.add_legend()
             plt.savefig(graph_file)
-            # pass
         else:
             print(f'Not plotting due to empty dataframe')
 
-        merged = pd.merge(left=s_df, right=interaction_events_df, on=["round", "name", "ct_skew"], how="left")
-        print(merged.columns)
-        print(interaction_events_df.groupby(['ct_skew']).max()['wall_time'])
+        merged = pd.merge(left=s_df, right=interaction_events_df, on=["round", "name"], how="left")
+        # print(merged.columns)
 
         graph_file = graphs_path / f"{exp_name}_b{n_byz}_wall_time.png"
         graph_file_pdf = graphs_path / f"{exp_name}_b{n_byz}_wall_time.pdf"
         print(f"Generating plot: {graph_file}")
         local_df = merged
-        skew_hue_order = [f'{float(x)}x' for x in [1,2,3,4,8,12]]
-        l_df = local_df[local_df['round'] <= 50]
-        if len(l_df):
-            
-            l_df['wall_time'] = l_df['wall_time']/ 1000.0
+
+        local_df['wall_time'] = local_df['wall_time'].apply(lambda x: x / 1000.0)
+        local_df = local_df [['accuracy','wall_time', 'name', 'agg_type']]
+        list_row = [10.25, 0.0, 'Server-f0-sync', 'sync']
+        local_df.loc[len(local_df)] = list_row
+        list_row = [10.25, 0.0, 'FedAsync-f0-semi-async', 'semi-async']
+        local_df.loc[len(local_df)] = list_row
+        local_df['agg_type'] = local_df['agg_type'].replace(['sync',], 'Synchronous')
+        local_df['agg_type'] = local_df['agg_type'].replace(['semi-async',], 'Asynchronous')
+
+        print(local_df)
+
+        if len(local_df):
             plt.figure(figsize=fig_size)
-            g = sns.lineplot(data=l_df, x="wall_time", y="accuracy", hue='ct_skew', style="ct_skew", markers=False, dashes=False, hue_order=skew_hue_order)
-            g.legend_.set_title(None)
+            g = sns.lineplot(data=local_df, x="wall_time", y="accuracy", hue="agg_type")
             # g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
             # g.map(sns.lineplot, "round", "accuracy")
             # g.add_legend()
-            plt.xlabel('Wall Time (s)')
-            plt.ylabel('Accuracy  (%)')
-            # plt.xlim((0,5000))
+            plt.xlim((0,120))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Accuracy (%)')
+            # g._legend.set_title(None)
+            # replace labels
+            # new_labels = ['Synchronous', 'Asynchronous']
+            # for t, l in zip(g._legend.texts, new_labels):
+            #     t.set_text(l)
+            plt.legend(title=None)
             plt.savefig(graph_file)
             plt.savefig(graph_file_pdf)
-
-            end_time_df = l_df.groupby(['ct_skew']).max()[['wall_time']].reset_index()
-            # print(f'{end_time_df["wall_time"]=}')
-            min_skew = end_time_df.min()
-            print(end_time_df['wall_time'])
-            print(f'{min_skew["wall_time"]=}')
-            end_time_df['times'] = (end_time_df['wall_time'] / min_skew["wall_time"]).round(2)
-            end_time_df = end_time_df.sort_values(by=['times'])
-            print(end_time_df[['ct_skew', 'times', 'wall_time']])
-
         else:
             print(f'Not plotting due to empty dataframe')
 
@@ -465,8 +465,6 @@ if __name__ == "__main__":
     print(f"Saving figure at {graph_file}")
 
     plt.show()
-
-
 
 
     exit()

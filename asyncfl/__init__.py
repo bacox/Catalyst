@@ -14,3 +14,4 @@ from .fedwait_server import FedWait
 from .validate_server import ValidateServer
 from .pessimistic_server import PessimisticServer
 from .semi_async_server import SemiAsync
+from .pixel_client import PixelClient

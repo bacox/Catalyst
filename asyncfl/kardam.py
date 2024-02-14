@@ -76,8 +76,8 @@ class Kardam(Server):
     * Dampening filter
     * Frequency filter
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, damp_alpha: float = 0.2, use_fedasync_alpha = False, use_fedasync_aggr = False, use_lipschitz_server_approx = False) -> None:
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, backdoor_args = {}, damp_alpha: float = 0.2, use_fedasync_alpha = False, use_fedasync_aggr = False, use_lipschitz_server_approx = False) -> None:
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args)
         self.damp_alpha = damp_alpha
         self.cons_rejections = 0
         self.hack = True
