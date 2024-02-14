@@ -17,7 +17,7 @@ cache:
 
 before_script:
   - python --version  # For debugging
-  - apt update && apt install -y libsm6 libxext6 ffmpeg libfontconfig1 libxrender1 libgl1-mesa-glx
+  - apt update && apt install -y build-essential libsm6 libxext6 ffmpeg libfontconfig1 libxrender1 libgl1-mesa-glx
   - pip install virtualenv pytest
   - virtualenv venv
   - source venv/bin/activate
