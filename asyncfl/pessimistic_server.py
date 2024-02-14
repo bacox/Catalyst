@@ -88,7 +88,11 @@ class PessimisticServer(Server):
                             raise e
                         
                 self.clipbounds[self.age], euc_dists = flame_v3_clipbound(list(self.pending[self.age].values()))
+                logging.debug(f'>> PRE FILTER: {len(list(self.pending[self.age].values()))=}')
+                equals = [list(self.pending[self.age].values())[0]] * 21
                 filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.f + 1, 2))
+
+                logging.debug(f'>> POST FILTER: {len(filtered_weights)=}, {len(benign_clients)}')
                 euc_dists = [x for idx, x in enumerate(euc_dists) if idx in benign_clients]
                 # @TODO: Add server learning rate?
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])

@@ -109,6 +109,7 @@ class Server:
         self.n = n
         self.f = f
         self.model_history = [] # Indexed by time t
+        self.model_client_history = {}
         # self.dataset =
         # self.dataset_name = dataset
         # self.test_set = afl_dataset(
@@ -135,7 +136,9 @@ class Server:
             drop_last=self.is_lstm)
 
         # Updated way
-        self.model_history.append(self.get_model_dict_vector())
+        # self.model_history.append(self.get_model_dict_vector())
+        for i in range(n):
+            self.model_client_history[i]=self.get_model_dict_vector()
         self.test_backdoor = False
         if backdoor_args != {}:
             self.test_backdoor = True
@@ -216,11 +219,13 @@ class Server:
     
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
         logging.info(f'Default server dict_vector update of client {client_id}')
-        server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
-
-        model_difference = weight_vec - self.model_history[server_model_age] # Gradient approximation
+        # server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+        server_model = self.model_client_history[client_id]
+        # model_difference = weight_vec - self.model_history[server_model_age] # Gradient approximation
+        model_difference = weight_vec - server_model # Gradient approximation
         updated_model_vec = no_defense_vec_update([model_difference], self.get_model_dict_vector(), server_rl=self.learning_rate)
-        self.model_history.append(updated_model_vec)
+        # self.model_history.append(updated_model_vec)
+        self.model_client_history[client_id] = updated_model_vec
         self.load_model_dict_vector(updated_model_vec)
         self.incr_age()
         # logging.info(updated_model_vec)

@@ -270,7 +270,7 @@ class Scheduler:
                 if np.isnan(last_five_loses).all():
                     logging.warning('Server is stopping because of too many successive NaN values during server testing')
                     break
-                server_metrics.append([update_id, out[0], out[1]])
+                server_metrics.append([update_id, out[0], out[1], out[2]])
                 pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
                 logging.info(f"[R {update_id:3d} {server_name}] {self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
@@ -281,9 +281,9 @@ class Scheduler:
             is_byzantine = client.is_byzantine
             client_age = client.local_age
             if type(server) == Kardam:
-                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
+                agg_weights, _has_aggregated = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
             else:
-                agg_weights : np.ndarray = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
+                agg_weights, _has_aggregated = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
             client.load_model_dict_vector(agg_weights)
             client.local_age = server.age
 
@@ -524,6 +524,8 @@ class Scheduler:
         return server_metrics, server.bft_telemetry, interaction_events, aggregation_events
 
     def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
+        test_frequency = 1
+        
         server_metrics = []
         update_counter = 0 # Keep track of the number of total updates from clients
         agg_weights = server.get_model_weights()
@@ -553,7 +555,7 @@ class Scheduler:
             # Test progress
             if update_id % test_frequency == 0:
                 out = server.evaluate_model()
-                server_metrics.append([update_id, out[0], out[1]])
+                server_metrics.append([update_id, out[0], out[1], out[2]])
                 pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
             client_weights = []

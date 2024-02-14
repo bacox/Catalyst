@@ -3,7 +3,7 @@ from pathlib import Path
 from pprint import PrettyPrinter
 from asyncfl.dataloader import load_mnist
 
-from asyncfl.pixel_client import LocalMaliciousUpdate
+# from asyncfl.pixel_client import LocalMaliciousUpdate
 
 pp = PrettyPrinter(indent=4)
 import numpy as np
@@ -401,6 +401,7 @@ if __name__ == "__main__":
         print(interaction_events_df.groupby(['ct_skew']).max()['wall_time'])
 
         graph_file = graphs_path / f"{exp_name}_b{n_byz}_wall_time.png"
+        graph_file_pdf = graphs_path / f"{exp_name}_b{n_byz}_wall_time.pdf"
         print(f"Generating plot: {graph_file}")
         local_df = merged
         skew_hue_order = [f'{float(x)}x' for x in [1,2,3,4,8,12]]
@@ -409,7 +410,7 @@ if __name__ == "__main__":
             
             l_df['wall_time'] = l_df['wall_time']/ 1000.0
             plt.figure(figsize=fig_size)
-            g = sns.lineplot(data=l_df, x="wall_time", y="accuracy", hue='ct_skew', style="ct_skew", markers=True, dashes=False, hue_order=skew_hue_order)
+            g = sns.lineplot(data=l_df, x="wall_time", y="accuracy", hue='ct_skew', style="ct_skew", markers=False, dashes=False, hue_order=skew_hue_order)
             g.legend_.set_title(None)
             # g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
             # g.map(sns.lineplot, "round", "accuracy")
@@ -418,6 +419,7 @@ if __name__ == "__main__":
             plt.ylabel('Accuracy  (%)')
             # plt.xlim((0,5000))
             plt.savefig(graph_file)
+            plt.savefig(graph_file_pdf)
 
             end_time_df = l_df.groupby(['ct_skew']).max()[['wall_time']].reset_index()
             # print(f'{end_time_df["wall_time"]=}')

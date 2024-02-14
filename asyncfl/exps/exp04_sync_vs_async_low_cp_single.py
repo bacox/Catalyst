@@ -134,6 +134,10 @@ if __name__ == '__main__':
         dfs.append(local_df)
     server_df = pd.concat(dfs, ignore_index=True)
 
+    print(server_df.columns)
+
+    exit()
+
     graph_file = graphs_path / f'{exp_name}.png'
     graph_file_pdf = graphs_path / f'{exp_name}.pdf'
     graph_file2 = graphs_path / f'{exp_name}_data_used.png'
@@ -150,6 +154,8 @@ if __name__ == '__main__':
     plt.savefig(graph_file)
     plt.savefig(graph_file_pdf)
     plt.close(fig)
+
+    
 
     # fig = plt.figure(figsize=(12, 6))
     # g = sns.lineplot(data=server_df, x='data_used', y='accuracy', hue='name')

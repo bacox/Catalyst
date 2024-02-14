@@ -23,9 +23,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 54: Semi Aync")
+    print("Exp 55: False positive")
 
-    exp_name = "exp54_semi_async"
+    exp_name = "exp54_false_positive"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     if not args.o:
         # Define configuration
         # Single threaded is suggested when running with 100 clients
-        multi_thread = True
+        multi_thread = False
         pool_size = 6
         configs = []
         # model_name = 'cifar10-resnet9'
@@ -109,7 +109,7 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
+            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             [
                 AFL.PessimisticServer,
                 {
@@ -329,7 +329,6 @@ if __name__ == "__main__":
         local_df["num_clients"] = num_clients
         local_df["impact_delayed"] = impact_delayed
         local_df["alg_name"] = parts[-2]
-        local_df['agg_type'] = cfg_data['aggregation_type']
         # local_df['use_lipschitz_server_approx'] = cfg_data['server_args']['use_lipschitz_server_approx']
         local_df_name = f"{parts[-2]}-f{f}-id{impact_delayed}-esf{int(enable_scaling_factor)}-{name_suffix}"
         # print(local_df_name, parts)
