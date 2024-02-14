@@ -17,6 +17,8 @@ cache:
 
 before_script:
   - python --version  # For debugging
+  - add-apt-repository python-opencv
+  - apt-get update
   - apt install python3-opencv
   - pip install virtualenv pytest
   - virtualenv venv
