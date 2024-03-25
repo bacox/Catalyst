@@ -23,9 +23,9 @@ plt.ioff()
 if __name__ == "__main__":
     args = cli_options()
 
-    print("Exp 55: False positive")
+    print("Exp 56: Flame Naive Impl")
 
-    exp_name = "exp55_false_positive"
+    exp_name = "exp56_flame_naive_flatter"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -47,8 +47,8 @@ if __name__ == "__main__":
     if not args.o:
         # Define configuration
         # Single threaded is suggested when running with 100 clients
-        multi_thread = False
-        pool_size = 6
+        multi_thread = True
+        pool_size = 5
         configs = []
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
@@ -59,23 +59,31 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 4
+        num_rounds = 8
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 3
+        repetitions = 1
         exp_id = 0
         # server_lr = 0.005
         server_lr = 0.1
         # num_clients = 50
         # num_clients = 10
         ff = 10
+
+        # Sampling labels limit
+        limit = 6
         var_sets = [
-            # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 1, "flame_hist": 3},
+            # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
+            # {"num_clients": 30, "num_byz_nodes": 10, "flame_hist": 3},
             # {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
         ]
 
+        # sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': limit }}
+        sampler = {'sampler': 'uniform', 'sampler_args': {}}
+
+
         attacks = [
-            [AFL.NGClient, {"magnitude": 10, "sampler": "uniform", "sampler_args": {}}],
+            [AFL.NGClient, {**{"magnitude": 10}, **sampler}],
             # [
             #     AFL.PixelClient,
             #     {
@@ -109,19 +117,41 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
-            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
             [
-                AFL.PessimisticServer,
+                AFL.FlameNaiveBaseline,
                 {
-                    "learning_rate": server_lr,
-                    "k": 600,
-                    "disable_alpha": False,
-                    "impact_delayed": 1.0,
-                    "enable_scaling_factor": False,
-                    "aggregation_bound": 2*ff+1,
+                    "learning_rate": server_lr, 
+                    "k": 3, 
+                    "disable_alpha": True,
+                    "alg_version": 'B'
                 },
                 "semi-async",
             ],
+            [
+                AFL.FlameNaiveBaseline,
+                {
+                    "learning_rate": server_lr, 
+                    "k": 3, 
+                    "disable_alpha": True,
+                    "alg_version": 'A'
+                },
+                "semi-async",
+            ],
+            # [
+            #     AFL.PessimisticServer,
+            #     {
+            #         "learning_rate": server_lr,
+            #         "k": 6,
+            #         "disable_alpha": False,
+            #         "impact_delayed": 1.0,
+            #         "enable_scaling_factor": False,
+            #         "aggregation_bound": 10,
+            #     },
+            #     "semi-async",
+            # ],
+            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
+
             # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
             # [
             #     AFL.PessimisticServer,
@@ -146,22 +176,36 @@ if __name__ == "__main__":
         # @TODO: BASGD alg works with gradients. In the implementation we use weights. This is a difference.
 
         for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
+
+
+
             num_clients, f, fh = var_set.values()
             ct_key = f"{num_clients}-{f}-{fh}-{_r}"
-            f = ff
+            # f = ff
             # print(n, f, fh)
             # ct_key = f'{num_clients}-{f}'
             if ct_key not in generated_ct.keys():
-                f2 = 2*f
-                ct_f2 = np.abs(np.random.normal(400, 5, f*2))
-                ct_rest = np.abs(np.random.normal(600, 5, num_clients - 2*f))
+
+                # First create the byzantine client speeds
+                f_ct = np.abs(np.random.normal(200, 5, f))
+
+                # Create the benign client speeds
+                b = num_clients - f
+
+                f2 = min(2*f,b)
+                ct_f2 = np.abs(np.random.normal(600, 5, f2))
+                
+                ct_rest = np.abs(np.random.normal(400, 5, max(b - f2, 0)))
                 ct_clients = np.concatenate((ct_f2, ct_rest), axis=0)
-                assert len(ct_clients) == num_clients
+                print(f'{len(ct_clients)} and {b=}')
+                assert len(ct_clients) == b
                 # ct_clients = np.abs(np.random.normal(1000, 5, num_clients - f))
-                f_ct = np.abs(np.random.normal(1000, 5, f))
+                f_ct = np.abs(np.random.normal(200, 5, f))
                 generated_ct[ct_key] = [ct_clients, f_ct]
             ct_clients, f_ct = copy.deepcopy(generated_ct[ct_key])
-            print(max(ct_clients))
+            # print(max(ct_clients))
+            # print(len(ct_clients), len(f_ct), f)
+            # exit()
 
             # @TODO: Make sure they have exactly the same schedule!!
             # 1. Generate the same client schedule
@@ -204,7 +248,8 @@ if __name__ == "__main__":
                     "eval_interval": 5,
                     "clients": {
                         "client": AFL.Client,
-                        "client_args": {"learning_rate": server_lr, "sampler": "uniform", "sampler_args": {}},
+                        'client_args': sampler,
+                        # "client_args": {"learning_rate": server_lr, "sampler": "uniform", "sampler_args": {}},
                         "client_ct": ct_clients,
                         "n": num_clients,
                         "f": ff,
@@ -315,6 +360,9 @@ if __name__ == "__main__":
             impact_delayed = cfg_data["server_args"]["impact_delayed"]
         else:
             impact_delayed = 1.0
+        alg_version = ''
+        if 'alg_version' in cfg_data['server_args']:
+            alg_version = '-'+ cfg_data["server_args"]["alg_version"]
 
         byz_type = "None"
         if f:
@@ -330,7 +378,7 @@ if __name__ == "__main__":
         local_df["impact_delayed"] = impact_delayed
         local_df["alg_name"] = parts[-2]
         # local_df['use_lipschitz_server_approx'] = cfg_data['server_args']['use_lipschitz_server_approx']
-        local_df_name = f"{parts[-2]}-f{f}-id{impact_delayed}-esf{int(enable_scaling_factor)}-{name_suffix}"
+        local_df_name = f"{parts[-2]}-f{f}-id{impact_delayed}-esf{int(enable_scaling_factor)}-{name_suffix}{alg_version}"
         # print(local_df_name, parts)
         local_df["name"] = local_df_name
         ie_df["name"] = local_df_name

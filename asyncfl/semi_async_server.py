@@ -49,6 +49,8 @@ class SemiAsync(Server):
         except Exception as e:
             logging.error(f'Invalid aggregation bound {self.aggregation_bound=} and {self.f=}')
             raise e
+        # self.aggregation_bound = n
+        logging.info(f'[Semi] Aggregation bound {self.aggregation_bound=} with {f=}')
         self.pending = {}
         self.processed = {}
 
@@ -60,6 +62,7 @@ class SemiAsync(Server):
         self.buckets = Buckets()
 
 
+
          
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
@@ -67,12 +70,12 @@ class SemiAsync(Server):
         del pending[oldest]
         return pending
 
-    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
+    def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[Union[np.ndarray, None], bool]:
         has_aggregated = False
         prefix = ''
         if client_id in self.fast_clients:
-            prefix = ' FAST CLIENT'
-        logging.info(f'[Semi{prefix}] processing client {client_id}: {gradient_age=}, {self.age=}')
+            prefix = ' FS'
+        logging.info(f'[Semi{prefix}] processing client {client_id} ({gradient_age}|{self.age})')
         # logging.info(f'[PessServer] processing client {client_id} with time_delta {self.sched_ctx.current_client_time=}')
         assert self.aggregation_bound != None
 
@@ -84,7 +87,7 @@ class SemiAsync(Server):
             self.pending[self.age][client_id] = weight_vec
 
             if len(self.pending[self.age]) >= self.aggregation_bound:
-                # logging.info('[PessServer] Aggregate?')
+                logging.info('[Semi] Aggregate?')
                 from_k = max(self.age - self.k + 1, 0)
                 to_k = max(self.age, 0) # Change to make it work with range
                 W_i = [] # Store delayed aggregate and number of used weights
@@ -104,6 +107,12 @@ class SemiAsync(Server):
                 # logging.debug([(x[1].pid, x[3]) for x in self.sched_ctx.clients_adm['computing'] if x[1].pid in list(set(self.fast_clients))])
 
                 # Loop over older delayed updates
+                    
+
+                # Collect aggregation stats:
+                stat_cw = 0 #client weights
+                stat_fw = 0 # filtered weights
+                # client_weights = []
                 for i in range(from_k, to_k-1):
                     if i not in self.pending:
                         self.pending[i] = {}
@@ -129,6 +138,8 @@ class SemiAsync(Server):
                         
                 self.clipbounds[self.age], euc_dists = flame_v3_clipbound(list(self.pending[self.age].values()))
                 filtered_weights, benign_clients = flame_v3_filtering(list(self.pending[self.age].values()), min_cluster_size=max(self.f+1,2))
+                # stat_cw = len(client_weights)
+                # stat_fw = len(filtered_weights)
                 euc_dists = [x for idx, x in enumerate(euc_dists) if idx in benign_clients]
                 # @TODO: Add server learning rate?
                 W_hat = flame_v3_aggregate(self.get_model_dict_vector(), filtered_weights, euc_dists, self.clipbounds[self.age])
@@ -136,7 +147,9 @@ class SemiAsync(Server):
                 current_model = self.get_model_dict_vector()
                 # logging.info(f'[PessServer] Aggregate! with ratio {(2* self.f + 1)/ float(self.n)}')
 
-                updated_model = current_model + ((2* self.f + 1)/ float(self.n))*(W_hat - current_model)
+                # @TODO: Be consistent when using self.f and self.aggregation_bound!
+                # @TODO: How to express the impact of the main flame update and the late updates
+                updated_model = current_model + ((self.aggregation_bound)/ float(self.n))*(W_hat - current_model)
                 for grad_age, num_weights, delayed_weights in W_i:
                     # Staleness func?
                     alpha = self.learning_rate / float(max(grad_age, 1))
@@ -180,7 +193,7 @@ class SemiAsync(Server):
                 alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, current_bucket_model, self.learning_rate)
                 self.sched_ctx.send_model_to_client(client_id, alpha_averaged, self.age)
                 self.sched_ctx.move_client_to_compute_mode(client_id, partial=True)
-                logging.info(f'Client {client_id} will be a FAST client')
+                # logging.info(f'Client {client_id} will be a FAST client')
                 self.fast_clients.append(client_id)
                 return None, has_aggregated
 

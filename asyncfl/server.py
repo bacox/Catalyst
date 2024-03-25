@@ -7,6 +7,7 @@ import numpy as np
 import torch
 
 from asyncfl.backdoor_util import add_trigger, save_img, test_or_not
+from asyncfl.scheduler_util import SchedulerContext
 
 from .client import Client
 from .dataloader import afl_dataloader, afl_dataset
@@ -84,6 +85,7 @@ def no_defense_update(params, global_parameters, learning_rate=1.0):
             for var in sum_parameters:
                 # logging.info(f'Key: {key}')
                 sum_parameters[var] = sum_parameters[var] + params[i][var]
+    assert type(sum_parameters) == dict
     for var in sum_parameters:
         if var.split('.')[-1] == 'num_batches_tracked':
             global_parameters[var] = params[0][var]
@@ -128,7 +130,7 @@ class Server:
         self.age = 0
         self.lips = {}
         self.bft_telemetry = []
-        self.sched_ctx = None
+        self.sched_ctx : SchedulerContext
         self.is_lstm = isinstance(self.network, TextLSTM)
         self.test_set = afl_dataloader(
             dataset, test_batch_size=100 if self.is_lstm else 400,

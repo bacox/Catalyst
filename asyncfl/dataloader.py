@@ -61,7 +61,7 @@ def afl_dataloader(dataset, train_batch_size=50,
         indices = ds.indices
     elif sampler == 'nlabels':
         logging.info('Using N Labels sampler')
-        ds = N_Labels(dataset, n_clients, client_id, **sampler_args)
+        ds = N_Labels(dataset, n_clients, client_id, seed=seed, **sampler_args)
         indices = ds.indices
     elif sampler == 'limitlabelflex':
         ds = LimitLabelsSamplerFlex(dataset, n_clients, client_id, (sampler_args))

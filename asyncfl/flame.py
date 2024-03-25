@@ -174,14 +174,14 @@ def flame_v3(weight_vectors: List[np.ndarray], global_weight_vec: np.ndarray, mi
     clustered_clients_n = [(x,y.cpu().numpy()) for x,y in clustered_clients]
     return clustered_clients_n
 
-def flame_v3_clipbound(local_models: List[np.ndarray]):
+def flame_v3_clipbound(local_models: List[np.ndarray]) -> Tuple[float, np.ndarray]:
     local_models = [torch.from_numpy(x) for x in local_models] #type: ignore
     norm_list = np.array([])
     for i in range(len(local_models)):
         # norm_list = np.append(norm_list,torch.norm(update_params_vector[i],p=2))  # consider BN
         norm_list = np.append(norm_list,torch.norm(local_models[i],p=2).item())  # no consider BN
     
-    clip_value = np.median(norm_list)
+    clip_value = float(np.median(norm_list))
     return clip_value, norm_list
 
 def flame_v3_filtering(local_models: List[np.ndarray], min_cluster_size = -1):
