@@ -13,6 +13,7 @@ __pycache__/
 data.json
 graph.png
 graphs/*
+wandb
 
 # C extensions
 *.so

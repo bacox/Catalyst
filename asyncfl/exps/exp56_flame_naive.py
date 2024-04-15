@@ -2,6 +2,7 @@ import copy
 from pathlib import Path
 from pprint import PrettyPrinter
 from asyncfl.dataloader import load_mnist
+from asyncfl.exps import get_exp_project_name
 
 # from asyncfl.pixel_client import LocalMaliciousUpdate
 
@@ -33,11 +34,8 @@ if __name__ == "__main__":
 
     # Dev notes:
     # @TODO: generalize config generation
-    # What do we need for a config?
-    # Description of servers
-    # Description of clients
-    # Description of attackers
-    # General description of scenario
+    # Add experiment meta-data
+    # Make sure that reporting collects the same information for wandb as for local disk
 
     # Then:
     # - Generate client_ct
@@ -49,7 +47,11 @@ if __name__ == "__main__":
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
         pool_size = 5
+        reporting = True
+
         configs = []
+
+
         # model_name = 'cifar10-resnet9'
         # model_name = 'cifar10-resnet18'
         # model_name = 'cifar10-lenet'
@@ -59,31 +61,48 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 8
+        num_rounds = 25
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 1
         exp_id = 0
+
+        repetitions = 1
         # server_lr = 0.005
         server_lr = 0.1
         # num_clients = 50
         # num_clients = 10
         ff = 10
-
         # Sampling labels limit
-        limit = 6
-        var_sets = [
-            {"num_clients": 40, "num_byz_nodes": 1, "flame_hist": 3},
-            # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
-            # {"num_clients": 30, "num_byz_nodes": 10, "flame_hist": 3},
-            # {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
-        ]
+        limit = 2
+
+        # Variable parameters
+        niid_limit_var = [2,4,6,8,10]
+        byz_frac_var = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+
+        num_clients = [40]
+
+        # Static params
+        flame_hist = 3
+
+        for frac in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]:
+            print(int(frac * 40))
+
+        # var_sets = [
+        #     {"num_clients": 40, "num_byz_nodes": 1, "flame_hist": 3},
+        #     {"num_clients": 40, "num_byz_nodes": 10, "flame_hist": 3},
+        #     {"num_clients": 40, "num_byz_nodes": 20, "flame_hist": 3},
+        #     # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
+        #     # {"num_clients": 30, "num_byz_nodes": 10, "flame_hist": 3},
+        #     # {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
+        # ]
 
         # sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': limit }}
-        sampler = {'sampler': 'uniform', 'sampler_args': {}}
+        # sampler = {'sampler': 'uniform', 'sampler_args': {}}
+
 
 
         attacks = [
             [AFL.NGClient, {**{"magnitude": 10}, **sampler}],
+            [AFL.NGClient, {**{"magnitude": 10}}],
             # [
             #     AFL.PixelClient,
             #     {
@@ -117,27 +136,53 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True, 'reporting': reporting}, 'semi-async'],
+            # [
+            #     AFL.FlameNaiveBaseline,
+            #     {
+            #         "learning_rate": server_lr, 
+            #         "k": 3, 
+            #         "disable_alpha": True,
+            #         "alg_version": 'B',
+            #         'reporting': reporting
+            #     },
+            #     "semi-async",
+            # ],
+            # [
+            #     AFL.FlameNaiveBaseline,
+            #     {
+            #         "learning_rate": server_lr, 
+            #         "k": 3, 
+            #         "disable_alpha": True,
+            #         "alg_version": 'A',
+            #         'reporting': reporting
+            #     },
+            #     "semi-async",
+            # ],
             [
                 AFL.FlameNaiveBaseline,
                 {
                     "learning_rate": server_lr, 
                     "k": 3, 
                     "disable_alpha": True,
-                    "alg_version": 'B'
+                    "alg_version": 'B2',
+                    'reporting': reporting
                 },
                 "semi-async",
             ],
-            [
-                AFL.FlameNaiveBaseline,
-                {
-                    "learning_rate": server_lr, 
-                    "k": 3, 
-                    "disable_alpha": True,
-                    "alg_version": 'A'
-                },
-                "semi-async",
-            ],
+            # [
+            #     AFL.FlameNaiveBaseline,
+            #     {
+            #         "learning_rate": server_lr, 
+            #         "k": 3, 
+            #         "disable_alpha": True,
+            #         "alg_version": 'C',
+            #         'reporting': reporting
+            #     },
+            #     "semi-async",
+            # ],
+
+
             # [
             #     AFL.PessimisticServer,
             #     {
@@ -239,6 +284,8 @@ if __name__ == "__main__":
                 rounds = num_rounds * num_clients
             configs.append(
                 {
+                    "project": get_exp_project_name(),
+                    'exp_name': exp_name,
                     "exp_id": exp_id,
                     "aggregation_type": server[2],
                     "client_participartion": 0.2,
@@ -252,7 +299,7 @@ if __name__ == "__main__":
                         # "client_args": {"learning_rate": server_lr, "sampler": "uniform", "sampler_args": {}},
                         "client_ct": ct_clients,
                         "n": num_clients,
-                        "f": ff,
+                        "f": f,
                         # 'f': f,
                         "f_type": atk[0],
                         "f_args": atk[1],
@@ -262,6 +309,10 @@ if __name__ == "__main__":
                     "server_args": server[1],
                     "dataset_name": dataset,
                     "model_name": model_name,
+                    "meta_data": {
+                        'non_iid_limit': limit,
+                        'num_byz_nodes': f
+                        }
                 }
             )
 

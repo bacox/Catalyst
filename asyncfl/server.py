@@ -5,8 +5,10 @@ from typing import Any, List, Tuple, cast
 
 import numpy as np
 import torch
+import wandb
 
 from asyncfl.backdoor_util import add_trigger, save_img, test_or_not
+from asyncfl.reporting import init_reporting, report_data
 from asyncfl.scheduler_util import SchedulerContext
 
 from .client import Client
@@ -105,7 +107,7 @@ def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
 
 class Server:
 
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, backdoor_args = {}) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, backdoor_args = {}, aux_meta_data = {}, project_name= None, reporting = True) -> None:
         self.g_flat = None
         self.clients = []
         self.n = n
@@ -119,6 +121,11 @@ class Server:
         self.device = torch.device(
             'cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = get_model_by_name(model_name).to(self.device)
+        self.meta_data = {**{
+            'model-name': model_name,
+            'learning-rate': learning_rate,
+        }, **aux_meta_data}
+
         self.learning_rate = learning_rate
         # @TODO: Set learning rate dynamic
         self.optimizer = torch.optim.SGD(
@@ -145,6 +152,12 @@ class Server:
         if backdoor_args != {}:
             self.test_backdoor = True
             self.backdoor_args = backdoor_args
+        print(f'[Server] {project_name=}')
+        assert project_name != None
+        self.wandb_obj = None
+        if reporting == True:
+            self.wandb_obj = init_reporting(project_name, self.__class__.__name__, self.meta_data)
+        # self.init_wandb(project_name)
 
 
 
@@ -167,6 +180,19 @@ class Server:
         #         } for i in range(n)
         #     }
         # }
+            
+    # def init_wandb(self, exp_name):
+    #     # @TODO: Init wandb
+    #     print(f'INIT WANDB with {self.meta_data}')
+    #     self.wandb_obj = wandb.init(
+    #         # set the wandb project where this run will be logged
+    #         project=exp_name,
+    #         name= self.__class__.__name__,
+            
+    #         # track hyperparameters and run metadata
+    #         config=self.meta_data,
+    #         settings=wandb.Settings(console="off")
+    #     )
 
     def set_weights(self, weights):
 
@@ -296,7 +322,7 @@ class Server:
         self.prev_prev_gradients = self.prev_gradients.clone()
         self.prev_gradients = client_gradients.clone()
 
-    def evaluate_model(self, test_backdoor=False):
+    def evaluate_model(self, test_backdoor=False, sim_time=0):
         self.network.eval()
         correct = 0
         correct_backdoor = 0
@@ -365,8 +391,11 @@ class Server:
         logging.info(f'Eval --> correct_backdoor: {correct_backdoor} ({back_num}), total: {total}')
 
         loss /= total
+        server_acc = correct / total
+        report_data(self.wandb_obj, {'loss': loss, 'acc': server_acc, 'sim_time': sim_time})
+        # wandb.log({'loss': loss, 'acc': server_acc})
 
-        return exp(loss) if hidden else 100. * correct / total, loss, back_accu
+        return exp(loss) if hidden else 100. * server_acc, loss, back_accu
 
     # def create_clients(self, n, config=None):
     #     compute_times = []

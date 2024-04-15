@@ -5,6 +5,7 @@ from typing import List, cast
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+import wandb
 
 from asyncfl.util import compute_convergance, compute_lipschitz_simple
 

@@ -1,6 +1,13 @@
 import copy
 from pathlib import Path
 from pprint import PrettyPrinter
+from functools import partial
+
+import wandb
+
+from asyncfl.exps import get_exp_project_name
+
+from tqdm import tqdm
 from asyncfl.dataloader import load_mnist
 
 # from asyncfl.pixel_client import LocalMaliciousUpdate
@@ -19,6 +26,8 @@ from asyncfl.util import cli_options, dict_hash
 
 # Turn interactive plotting off
 plt.ioff()
+
+
 
 if __name__ == "__main__":
     args = cli_options()
@@ -59,7 +68,7 @@ if __name__ == "__main__":
         # num_byz_nodes = [0, 1, 3]
         # num_byz_nodes = [1]
         # num_byz_nodes = [0]
-        num_rounds = 20
+        num_rounds = 2
         idx = 1  # Most likely should not be changed in most cases
         repetitions = 1
         exp_id = 0
@@ -69,17 +78,19 @@ if __name__ == "__main__":
         # num_clients = 10
         ff = 10
 
+        reporting = False # Report to wandb
+
         # Sampling labels limit
-        limit = 6
+        limit = 3
         var_sets = [
-            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 3, "flame_hist": 3},
             # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
             # {"num_clients": 30, "num_byz_nodes": 10, "flame_hist": 3},
             # {"num_clients": 10, "num_byz_nodes": 3, "flame_hist": 3},
         ]
 
-        # sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': limit }}
-        sampler = {'sampler': 'uniform', 'sampler_args': {}}
+        sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': limit }}
+        # sampler = {'sampler': 'uniform', 'sampler_args': {}}
 
 
         attacks = [
@@ -116,8 +127,8 @@ if __name__ == "__main__":
             #     'semi-async'
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
-            [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": False}, 'semi-async'],
+            [AFL.FedAsync, {"learning_rate": server_lr, 'reporting': reporting}, "semi-async"],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
             # [
             #     AFL.FlameNaiveBaseline,
             #     {
@@ -249,6 +260,8 @@ if __name__ == "__main__":
                 rounds = num_rounds * num_clients
             configs.append(
                 {
+                    "project": get_exp_project_name(),
+                    'exp_name': exp_name,
                     "exp_id": exp_id,
                     "aggregation_type": server[2],
                     "client_participartion": 0.2,
@@ -291,6 +304,53 @@ if __name__ == "__main__":
 
         # plt.show()
         # exit()
+        if False:
+            # distribution_df = AFL.Scheduler.get_data_distribution(configs[0])
+            # distribution_df.to_csv('cache.csv')
+
+            distribution_df = pd.read_csv('cache.csv')
+            # distribution_df = distribution_df[distribution_df['client'] == 'c_2'][['label', 'lcount']]
+            # distribution_df = distribution_df[distribution_df['client'].isin(['c_2', 'c_3', 'c_4', 'c_38'])]
+
+            distribution_df = distribution_df[distribution_df['lcount'] > 0]
+            new_data = []
+            for idx, row in tqdm(distribution_df.iterrows()):
+                for i in range(row['lcount']):
+                    new_data.append([row['client'], row['byzantine'], row['label'], 1])
+
+            new_df = pd.DataFrame(new_data, columns=['client', 'byzantine', 'label', 'lcount'])
+
+            print(distribution_df.dtypes)
+
+            print(distribution_df)
+            
+            print('plotting')
+            plt.figure()
+
+            sns.displot(new_df, x='label', hue='byzantine', multiple='stack')
+            # sns.catplot(distribution_df, x='byzantine', y='lcount', kind='bar')
+
+
+            plt.savefig('data_dist2.png')
+            # plt.show()
+
+            print(new_df[['client', 'lcount']].groupby(['client']).sum())
+            print(new_df.groupby(['byzantine']).sum())
+            exit()
+
+        # wandb.init(
+        #     # set the wandb project where this run will be logged
+        #     project=get_exp_project_name(),
+            
+        #     # track hyperparameters and run metadata
+        #     config={
+        #     "learning_rate": server_lr,
+        #     "architecture": "CNN",
+        #     "dataset": model_name,
+        #     "epochs": rounds,
+        #     }
+        # )
+
         outputs = AFL.Scheduler.run_multiple(
             configs,
             pool_size=pool_size,
@@ -299,7 +359,7 @@ if __name__ == "__main__":
             multi_thread=multi_thread,
             autocomplete=args.autocomplete,
         )
-
+    wandb.finish()
     # Load raw data from file
     outputs2 = ""
     with open(data_file, "r") as f:
