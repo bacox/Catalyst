@@ -12,6 +12,14 @@ import seaborn as sns
 
 SEED = 42
 
+def set_theme(line_width=2.5):
+    sns.set_theme(
+        style="white",
+        palette="Dark2",
+        font_scale=1.5,
+        rc={"lines.linewidth": line_width},
+    )
+
 @dataclass(frozen=True)
 class ResultDataFrames:
     server_df: pd.DataFrame
@@ -68,7 +76,7 @@ def prepare_dfs(data_file: Path) -> ResultDataFrames:
 
 
 def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
-    sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
+    set_theme()
     fig_size = (12, 6)
 
     # for idx, row in interaction_events_df.iterrows():
@@ -155,8 +163,10 @@ def fill_table(res_dfs: ResultDataFrames, timestamp: int) -> None:
 
 
 def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> None:
-    sns.set_theme(style="white", palette="Dark2", font_scale=1.5, rc={"lines.linewidth": 2.5})  # type: ignore
+    set_theme(line_width=1.5)
     fig_size = (8, 6)
+    # fig_size = (12, 6)
+
 
     df = res_dfs.server_df.copy()
     df["alg"] = df["alg"].str.split().str[0]
@@ -173,11 +183,14 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
         formatter = lambda x: f"{x}%"
 
     graph_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.pdf"
+    png_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
     print(f"Generating plot: {graph_file}")
+    print(f"Generating plot: {png_file}")
     plt.figure(figsize=fig_size)
     g = sns.pointplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
     g.get_legend().set_title(None)
     plt.savefig(graph_file, bbox_inches="tight")
+    plt.savefig(png_file, bbox_inches="tight")
 
 
 def main() -> None:
