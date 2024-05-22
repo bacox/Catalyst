@@ -16,3 +16,4 @@ hdbscan
 scikit-image
 opencv-python
 pyyaml
+wandb
