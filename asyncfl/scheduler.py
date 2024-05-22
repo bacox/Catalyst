@@ -13,13 +13,24 @@ from multiprocessing.pool import AsyncResult
 from pathlib import Path
 from threading import Thread
 from typing import Any, List, Tuple, Union
-
+import os
 import numpy as np
+import pandas as pd
 import torch
 from tqdm.auto import tqdm
+import wandb
+from wandb import AlertLevel
+# os.environ["WANDB_SILENT"] = "true"
+
+from asyncfl.reporting import finish_exp, finish_reporting
+# import logging
+
+logger = logging.getLogger("wandb")
+logger.setLevel(logging.ERROR)
 
 from asyncfl.dataloader import afl_dataset2
 from asyncfl.network import flatten
+from asyncfl.scheduler_util import SchedulerContext
 
 from .client import Client
 from .kardam import Kardam
@@ -44,6 +55,11 @@ def dict_convert_class_to_strings(dictionary: dict):
         return data
     d = dict_walk(d)
     return d
+
+def wrap_name(name: str, l: int = 13) -> str:
+    if len(name) > l:
+        return f'{name[:l-6]}...{name[-3:]}'
+    return name
 
 class PoolManager:
     def __init__(self, processes=None, initializer=None, initargs=(), maxtasksperchild=None, context=None) -> None:
@@ -79,12 +95,20 @@ class PoolManager:
 
 
 class Scheduler:
-    def __init__(self, dataset_name: str, model_name: str, worker_id = 0, **config):
+    def __init__(self, dataset_name: str, model_name: str, worker_id = 0, project='async-default', exp_name=None, **config):
         self.dataset_name = dataset_name
         self.model_name = model_name
         self.clients: List[Client] = []
         self.entities = {}
         self.compute_times = {}
+        self.project = project
+        self.exp_name = exp_name
+        self.aux_meta_data = {
+            'exp_name': exp_name
+        }
+
+        self.aux_meta_data = {**self.aux_meta_data, **config.get('meta_data', {})}
+
         self.worker_id = worker_id
         if "learning_rate" not in config["server_args"]:
             config["server_args"]["learning_rate"] = 0.005
@@ -98,17 +122,36 @@ class Scheduler:
         client_data = [(x, clients["client"], clients["client_args"]) for x in clients["client_ct"]] + [
             (x, clients["f_type"], clients["f_args"]) for x in clients["f_ct"]
         ]
-        num_clients = len(client_data)
+        # Use this line for the wrongly assumed world size. It does not account for the byzaintine clients
+        # num_clients = len(client_data)
+        # Use this line for the correct world size
+        num_clients = len(client_data) - f
+
+        # for x in client_data:
+        #     print(x)
+        # exit()
 
         self.train_set = afl_dataset2(self.dataset_name, data_type="train")
         self.test_set = afl_dataset2(self.dataset_name, data_type="test")
         logging.info('Creating server')
-        self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, **config["server_args"])
+
+        backdoor_data = [z for _x, _y, z in client_data if 'backdoor_args' in z]
+        if len(backdoor_data) > 0:
+            backdoor_args = backdoor_data[0]['backdoor_args']
+            self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, backdoor_args=backdoor_args, project_name=self.project, aux_meta_data=self.aux_meta_data, **config["server_args"])
+        else:
+            self.entities["server"] = config["server"](n, f, self.test_set, self.model_name, project_name=self.project, aux_meta_data=self.aux_meta_data, **config["server_args"])
 
         def create_client(self, pid, c_ct, client_class, client_args) -> int:
             node_id = f"c_{pid}"
             # print(client_class)
-            self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            if 'backdoor_args' in client_args:
+                client_args = {**client_args, **client_args['backdoor_args']}
+                del client_args['backdoor_args']
+                self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            else:
+                self.entities[node_id] = client_class(pid, num_clients, self.train_set, self.model_name, **client_args)
+            self.entities[node_id].dataset_name = self.dataset_name
             self.compute_times[pid] = c_ct
             return pid
 
@@ -119,10 +162,11 @@ class Scheduler:
             return p
         logging.info('Creating clients')
         loading_processes = []
-        with ThreadPoolExecutor(max_workers=10) as executor:
+        with ThreadPoolExecutor(max_workers=5) as executor:
             try:
                 position = self.worker_id
                 for pid, (c_ct, client_class, client_args) in enumerate(client_data):
+                    
                     # print(pid, c_ct, client_class, client_args)
                     node_id = f"c_{pid}"
                     # loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
@@ -191,6 +235,8 @@ class Scheduler:
 
     # def run_no_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr=""):
     # def run_sync_tasks(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, add_descr="", client_participation=1.0):
+
+
     def execute(self, num_rounds, ct_clients=[], progress_disabled=False, position=0, server_name="", client_participation=1.0, fl_type: str = 'async', batch_limit = -1, test_frequency = 25):
         interaction_sequence, interaction_events = [], []
         interaction_sequence_async, interaction_events_async = [], []
@@ -207,7 +253,10 @@ class Scheduler:
             # Compute the clients server interactions
 
         else:
-            logging.info('Running synchronous')
+            logging.info('Running synchronous')\
+            
+
+        
 
         # print(self.compute_times)
 
@@ -239,7 +288,7 @@ class Scheduler:
             server_metrics, model_age_stats, bft_telemetry, aggregation_events = self._async_exec_loop(num_rounds, server, clients, interaction_sequence_async, position, server_name, batch_limit=batch_limit, test_frequency=test_frequency)
             interaction_events = interaction_events_async
 
-        return server_metrics, model_age_stats, bft_telemetry, interaction_events, aggregation_events
+        return server_metrics, model_age_stats, bft_telemetry, interaction_events, aggregation_events, server.wandb_obj
 
     def _async_exec_loop(self, num_rounds, server:Server, clients: List[Client], interaction_sequence, position, server_name, batch_limit=-1, test_frequency=25):
         # Play all the server interactions
@@ -247,7 +296,7 @@ class Scheduler:
         server_metrics = []
         model_age_stats = []
         last_five_loses = []
-        add_descr = f"[W{position}: {server_name}] "
+        add_descr = f"[W{position}: {wrap_name(server_name)}] "
         for update_id, client_id in enumerate(
             pbar := tqdm(interaction_sequence, position=position, leave=None, desc=add_descr)
         ):
@@ -258,7 +307,7 @@ class Scheduler:
                 if np.isnan(last_five_loses).all():
                     logging.warning('Server is stopping because of too many successive NaN values during server testing')
                     break
-                server_metrics.append([update_id, out[0], out[1]])
+                server_metrics.append([update_id, out[0], out[1], out[2]])
                 pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
                 logging.info(f"[R {update_id:3d} {server_name}] {self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
@@ -269,9 +318,9 @@ class Scheduler:
             is_byzantine = client.is_byzantine
             client_age = client.local_age
             if type(server) == Kardam:
-                agg_weights, _ = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
+                agg_weights, _has_aggregated = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine, client.lipschitz)
             else:
-                agg_weights, _ = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
+                agg_weights, _has_aggregated = server.client_weight_dict_vec_update(client_id, client.get_model_dict_vector(), client_age, is_byzantine)
             client.load_model_dict_vector(agg_weights)
             client.local_age = server.age
 
@@ -295,77 +344,7 @@ class Scheduler:
         # }
 
 
-        class SchedulerContext():
-            def __init__(self, clients : List[Client], compute_times: dict) -> None:
-                self.clients_adm = {
-                    'idle': [],
-                    'computing': []
-                }
-                self.compute_times = compute_times
-                self.clients = clients
-                self.current_client_time = 0
-
-            def next_client(self):
-                # Next client
-                self.clients_adm['computing'].sort(key=lambda x: x[0])
-                # logging.info(f'[SCTX] {self.clients_adm["computing"]}')
-
-                # logging.info(f'{computing_clients=}')
-                # logging.info(f"{len(self.clients_adm['computing'])=} && {len(self.clients_adm['idle'])=}")
-                client_time, next_client = self.clients_adm['computing'].pop(0)
-                # logging.info(f'[SchedCTX] Next time delta {client_time=}')
-                self.current_client_time = client_time
-                assert client_time >= 0
-                return client_time, next_client
-
-            def adjust_time(self, client_time: Union[float, None] = None):
-                time_delta = self.current_client_time
-                if client_time is not None:
-                    time_delta = client_time
-                # logging.info(f'[SchedCTX] Shifting time with {client_time=}')
-
-                for cc in self.clients_adm['computing']:
-                    try:
-                        assert cc[0] >= time_delta
-                    except Exception as e:
-                        logging.warning(f'[SchedCTX] time shift {cc[0]} >= {time_delta}')
-                        raise e
-                    cc[0] -= time_delta
-
-
-            def send_model_to_client(self, client_id: int, model_vec: np.ndarray, model_age: int):
-                c = next((x for x in self.clients if x.pid == client_id), None)
-                assert c is not None
-                c.load_model_dict_vector(model_vec)
-                c.local_age = model_age
-
-            def move_client_to_idle_mode(self, client_id: int):
-                c = next((x for x in self.clients if x.pid == client_id), None)
-                assert c is not None
-                assert c.pid not in [y.pid for _x, y in self.clients_adm["computing"]]
-                self.clients_adm['idle'].append(c)
-
-            def move_client_to_compute_mode(self, client_id: int):
-                # This causes problems because the client is re-inserted into the computing part before adjusting time.
-                # @TODO: Make sure this doesn't mess up the adjust time part.
-                c = next((x for x in self.clients if x.pid == client_id), None)
-                assert c is not None
-                self.clients_adm['idle'] = [x for x in self.clients_adm['idle'] if x.pid != c.pid]
-                assert c.pid not in [y.pid for y in self.clients_adm["idle"]]
-
-                # Give the client double the compute time because time adjustment happens after this
-                self.clients_adm['computing'].append([self.compute_times[c.pid] + self.current_client_time, c])
-
-            def client_partial_training(self, client_id: int, run_for_time: float):
-                c = next((x for x in self.clients if x.pid == client_id), None)
-                assert c is not None
-                c.move_to_gpu()
-                c.train(num_batches=batch_limit)
-                is_byzantine = c.is_byzantine
-
-                # @TODO: Do something with the data
-                data = c.get_model_dict_vector(),c.local_age, is_byzantine
-                c.move_to_cpu()
+        has_recently_aggregated = False
 
 
 
@@ -379,13 +358,13 @@ class Scheduler:
         # computing_clients = []
         # waiting_clients = []
         byz_clients = []
-        add_descr = f"[W{position}: {server_name}] "
+        add_descr = f"[W{position}: {wrap_name(server_name)}] "
         server_age = 0
 
         # Init
         agg_weight_vec: np.ndarray = server.get_model_dict_vector()
         for client in clients:
-            schedulerCtx.clients_adm['computing'].append([self.compute_times[client.pid], client])
+            schedulerCtx.clients_adm['computing'].append([self.compute_times[client.pid], client, False, wall_time])
             client.move_to_gpu()
             client.load_model_dict_vector(agg_weight_vec)
             client.local_age = server.get_age()
@@ -404,15 +383,20 @@ class Scheduler:
 
 
             # Test progress
-            if update_id % test_frequency == 0:
-                out = server.evaluate_model()
-                server_metrics.append([update_id, out[0], out[1]])
-                last_five_loses.append(out[1])
-                last_five_loses = last_five_loses[-5:]
-                if np.isnan(last_five_loses).all():
-                    logging.warning('Server is stopping because of too many successive NaN values during server testing')
+            if has_recently_aggregated and update_id % test_frequency == 0:
+                has_recently_aggregated = False
+                result = self.test_server(server, update_id, server_age, add_descr, server_metrics, last_five_loses, pbar, position=position, sim_time=wall_time)
+                if not result:
+                    # Stop training
                     break
-                pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+                # out = server.evaluate_model()
+                # server_metrics.append([update_id, out[0], out[1]])
+                # last_five_loses.append(out[1])
+                # last_five_loses = last_five_loses[-5:]
+                # if np.isnan(last_five_loses).all():
+                #     logging.warning('Server is stopping because of too many successive NaN values during server testing')
+                #     break
+                # pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
             # Next client
             # schedulerCtx.clients_adm['computing'].sort(key=lambda x: x[0])
@@ -467,8 +451,10 @@ class Scheduler:
             #     cc[0] -= client_time
             # assert client_time <= 0.0
             wall_time += client_time
+            assert schedulerCtx.wall_time == wall_time
             if has_aggregated:
                 aggregation_events.append([update_id, wall_time])
+                has_recently_aggregated = True
             interaction_events.append([next_client.pid, wall_time, client_time, client_time])
             # schedulerCtx.clients_adm['idle'].append(next_client)
 
@@ -496,11 +482,13 @@ class Scheduler:
         return server_metrics, server.bft_telemetry, interaction_events, aggregation_events
 
     def _sync_exec_loop(self, num_rounds: int, server: Server, clients: List[Client], client_participation,  position = 0, server_name='', batch_limit = -1, test_frequency=5):
+        test_frequency = 1
+        
         server_metrics = []
         update_counter = 0 # Keep track of the number of total updates from clients
         agg_weights = server.get_model_weights()
         agg_weight_vec: np.ndarray = server.get_model_dict_vector()
-        add_descr = f"[W{position}: {server_name}] "
+        add_descr = f"[W{position}: {wrap_name(server_name)}] "
         interaction_events = []
         wall_time = 0
         num_clients = int(np.max([1, np.floor(float(len(clients)) * client_participation)]))
@@ -525,7 +513,7 @@ class Scheduler:
             # Test progress
             if update_id % test_frequency == 0:
                 out = server.evaluate_model()
-                server_metrics.append([update_id, out[0], out[1]])
+                server_metrics.append([update_id, out[0], out[1], out[2]])
                 pbar.set_description(f"{add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
 
             client_weights = []
@@ -558,7 +546,24 @@ class Scheduler:
 
         return server_metrics, server.bft_telemetry, interaction_events, []
 
+    def test_server(self, server: Server , update_id, server_age,  add_descr = '', server_metrics = [], last_five_loses = [], pbar = [], backdoor=False, position: int = 0, sim_time = 0):
+        # Test progress
+        out = server.evaluate_model(sim_time=sim_time)
+        server_metrics.append([update_id, out[0], out[1], out[2]])
+        last_five_loses.append(out[1])
+        last_five_loses = last_five_loses[-5:]
+        if np.isnan(last_five_loses).all():
+            logging.warning('Server is stopping because of too many successive NaN values during server testing')
+            return False
+        pbar.set_description(f"{server_age} {add_descr}{self.metric} = {out[0]:.2f}, Loss = {out[1]:.7f}")
+        # @TODO: Fix using reporting functions
+        # wandb.log({"update_id": update_id, "server_age": server_age, "acc": out[0], "loss": out[1], 'position': position})
+        return True
 
+    @staticmethod
+    def create_scheduler(cfg: dict, worker_id: int):
+        sched = Scheduler(**cfg, worker_id=worker_id)
+        return sched
 
 
     @staticmethod
@@ -580,7 +585,7 @@ class Scheduler:
                 worker_id = int(current_process()._identity[0])
             except:
                 worker_id = 0
-            sched = Scheduler(**cfg, worker_id=worker_id)
+            sched = Scheduler.create_scheduler(cfg, worker_id)
             num_rounds = cfg["num_rounds"]
             results = []
 
@@ -603,6 +608,8 @@ class Scheduler:
                 ],
                 safe_cfg,
             ]
+            wandb_obj = results[0][-1]
+            results[0] = results[0][:-1]
 
             if outfile:
                 if lock:
@@ -617,8 +624,8 @@ class Scheduler:
                     json.dump(completed_runs, f)
                 if lock:
                     lock.release()
-
-            return results
+            finish_exp(wandb_obj)
+            return results, wandb_obj
         except Exception as ex:
             print("Got an exception while running!!")
             print(traceback.format_exc())
@@ -634,6 +641,128 @@ class Scheduler:
             configs = [x for x in configs if x['exp_id'] not in keys]
             # @TODO: Append to output instead of overwriting
         return configs
+    
+    @staticmethod
+    def plot_data_distribution_by_time(configs, use_cache=False, filter_byzantine=True, cache_dir='tmp/cache', plot_dir='tmp', plot_name_prefix='data_dist'):
+            from matplotlib import pyplot as plt
+            import seaborn as sns
+
+            # Make sure cache_dir and the plot_dir exists using the Path object
+            Path(cache_dir).mkdir(parents=True, exist_ok=True)
+            Path(plot_dir).mkdir(parents=True, exist_ok=True)
+
+            # Iterate over all configs and generate data distribution
+            for cfg_id, config in enumerate(configs):   
+                print(f'Processing config {cfg_id}')  
+
+                limit = 10
+                if 'limit' in config['clients']['client_args']['sampler_args']:
+                    limit = config['clients']['client_args']['sampler_args']['limit']  
+                # Number of byzantines is
+                num_byz = len(config['clients']['f_ct'])
+                benign_clients = len(config['clients']['client_ct'])
+                total_clients = benign_clients + num_byz
+
+                cache_file = f'{cache_dir}/cache_{cfg_id}.csv'
+                if not use_cache:
+                    distribution_df = Scheduler.get_data_distribution(config)
+                    distribution_df.to_csv(cache_file)
+
+                distribution_df = pd.read_csv(cache_file)
+                compute_times = sorted(distribution_df['compute_time'].unique())
+
+                num_slow_clients = total_clients - (2*num_byz+ 1)
+                fast_ct = compute_times[:2*num_byz+ 1]
+                slow_ct = compute_times[2*num_byz+ 1:]
+
+                distribution_df = distribution_df[distribution_df['lcount'] > 0]
+                new_data = []
+                for idx, row in tqdm(distribution_df.iterrows()):
+                    for i in range(row['lcount']):
+                        new_data.append([row['client'], row['compute_time'], row['byzantine'], row['label'], 1])
+
+                new_df = pd.DataFrame(new_data, columns=['client', 'compute_time', 'byzantine', 'label', 'lcount'])
+
+                # Add client type to new_df based on fast_ct and slow_ct
+                new_df['client_type'] = 'fast'
+                new_df.loc[new_df['compute_time'].isin(slow_ct), 'client_type'] = 'slow'
+                new_df.loc[new_df['byzantine'] == 1, 'client_type'] = 'byzantine'
+
+                # Filter out all byzanitne clients from new_df
+                if filter_byzantine:
+                    new_df = new_df[new_df['byzantine'] == 0]
+
+                file_name = f'{plot_dir}/{plot_name_prefix}_cfg{cfg_id}_l{limit}.png'
+                plt.figure()
+
+                sns.displot(new_df, x='label', hue='client_type', multiple='stack')
+                plt.savefig(file_name)
+                plt.savefig(file_name.replace('.png', '.pdf'), bbox_inches='tight')
+                plt.close()
+                print(f'Graph written to {file_name}')
+
+    @staticmethod
+    def get_data_distribution(config, num_labels = 10) -> pd.DataFrame:
+        worker_id = 0
+        reporting_val = False
+        if 'reporting' in config['server_args']:
+            reporting_val = config['server_args']['reporting']
+            config['server_args']['reporting'] = False
+        
+        sched = Scheduler.create_scheduler(config, worker_id)
+        summed = 0
+        import torch.nn.functional as F
+        label_names = [str(x) for x in range(num_labels)]
+
+
+
+        data = []
+        cum_size = 0
+        for e_id, ent in tqdm([(x,y) for x,y in sched.entities.items() if x.startswith('c')], desc='Iterating clients'):
+            ent: Client
+            labels = []
+            compute_time = sched.compute_times[int(e_id[2:])]
+
+            # print(f'Client {e_id} has {sched.entities}')
+            # print(f'{sched.compute_times=}')
+
+            # Print the size of the client dataset 
+            # Make sure to also print the cummulative size of the dataset
+            # print(f'{len(ent.train_set.dataset)=}')
+
+            cum_size += len(ent.train_set.dataset) # type: ignore
+
+            # Print the size of the dataset, the cummulative size and the e_id
+            # print(f'{len(ent.train_set.dataset)=}, {cum_size=}, {e_id=}')
+
+            for batch_idx, (inputs, labels_tmp) in enumerate(ent.train_set):
+                labels.append(labels_tmp)
+            labels = torch.cat(labels, 0).bincount()
+            # padding =  torch.zeros(11)
+            # labels = result = F.pad(input=labels, pad=(1), mode='constant', value=0)
+            pad_size = num_labels - len(labels)
+            m = torch.nn.ConstantPad1d((0,pad_size), 0)
+            labels = m(labels)
+
+            for l_count, l_name in zip(labels.tolist(), label_names):
+                data.append([e_id, compute_time, ent.is_byzantine, int(l_name), int(l_count)])
+
+
+            # data.append([e_id, ent.is_byzantine, *labels.tolist()])
+
+            
+
+
+            # labels = [x[1][1] for x in enumerate(ent.train_set)]
+            summed += len(ent.train_set.dataset.indices)
+        cnames = ['client', 'compute_time', 'byzantine', 'label', 'lcount']
+        df = pd.DataFrame(data, columns= cnames)
+
+        # Restore the reporting value
+        if 'reporting' in config['server_args']:
+            config['server_args']['reporting'] = reporting_val
+        return df
+
 
     @staticmethod
     def run_multiple(list_of_configs, pool_size=5, outfile: Union[str, Path] = 'data.json', clear_file=False, multi_thread = True, autocomplete = False):
@@ -643,9 +772,11 @@ class Scheduler:
             list_of_configs = Scheduler.filter_executed_exps(list_of_configs, outfile)
         pool_size = min(pool_size, len(list_of_configs))
         # install_mp_handler()
+        
         if clear_file and outfile and Path(outfile).exists():
             logging.info(f'Clearing existing output file "{Path(outfile).name}"')
             Path(outfile).unlink()
+        outfile = Path(outfile)
         start_time = time.time()
         outputs = []
         lock = tqdm.get_lock()
@@ -653,7 +784,7 @@ class Scheduler:
         cfg_args = [(x, outfile, lock) for x in list_of_configs]
         logging.info(f"Pool size = {pool_size}")
         logging.info(f'Run multi-threaded ? {multi_thread}')
-
+        wandb.setup()
         def init_func(args):
             multiprocessing.current_process().name = multiprocessing.current_process().name.replace('ForkPoolWorker-', 'W')
             tqdm.set_lock(args)
@@ -675,7 +806,13 @@ class Scheduler:
         else:
             print('Running single-threaded')
             outputs = [Scheduler.run_util(x) for x in cfg_args]
-        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
-        logging.info(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        # print(f'{outputs=}')
+        if outputs[-1]:
 
+            last_wandb = outputs[-1][-1]
+            last_wandb = wandb.init(reinit=True)
+        print(f'{last_wandb=}')
+        print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
+        
+        finish_reporting(last_wandb, outfile.stem, f'--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---')
         return outputs

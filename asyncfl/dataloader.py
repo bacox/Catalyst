@@ -10,7 +10,7 @@ from torchtext.vocab import Vocab, build_vocab_from_iterator
 from torchvision import datasets, transforms
 
 from asyncfl.datasampler import (DirichletSampler, LimitLabelsSampler,
-                                 LimitLabelsSamplerFlex, N_Labels,
+                                 LimitLabelsSamplerFlex, N_Labels, get_sampler,
                                  uniform_sampler_func)
 
 # 400
@@ -55,13 +55,16 @@ def afl_dataloader(dataset, train_batch_size=50,
     drop_last=False
     ) -> DataLoader:
 
+    # Print the number of clients
+    # print(f'[AFL DL] ({client_id}) Number of clients: {n_clients}')
+
     if sampler == 'dirichlet':
         logging.info('Using dirichlet sampler')
         ds = DirichletSampler(dataset, n_clients, client_id, (sampler_args))
         indices = ds.indices
     elif sampler == 'nlabels':
-        logging.info('Using N Labels sampler')
-        ds = N_Labels(dataset, n_clients, client_id, **sampler_args)
+        logging.info('Using nlabels sampler')
+        ds = N_Labels(dataset, n_clients, client_id, seed=seed, **sampler_args)
         indices = ds.indices
     elif sampler == 'limitlabelflex':
         ds = LimitLabelsSamplerFlex(dataset, n_clients, client_id, (sampler_args))
@@ -130,8 +133,7 @@ def afl_dataset(
         ]
     )
     data_set = datasets.CIFAR10(data_root, train=True, download=True, transform=None)
-    indices = list(range(0, len(data_set), 100))
-    # indices = uniform_sampler_func(data_set, n_clients, client_id, seed, **sampler_args)
+    indices = list(range(0, len(data_set), n_clients))
 
     ds_subset = Subset(data_set, indices)
     # data_set = None

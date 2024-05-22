@@ -1,4 +1,4 @@
-image: python:3.8
+image: python:3.8-slim-bookworm
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -17,6 +17,7 @@ cache:
 
 before_script:
   - python --version  # For debugging
+  - apt update && apt install -y build-essential tk libsm6 libxext6 ffmpeg libfontconfig1 libxrender1 libgl1-mesa-glx
   - pip install virtualenv pytest
   - virtualenv venv
   - source venv/bin/activate

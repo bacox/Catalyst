@@ -5,6 +5,11 @@ from typing import Any, List, Tuple, cast
 
 import numpy as np
 import torch
+import wandb
+
+from asyncfl.backdoor_util import add_trigger, save_img, test_or_not
+from asyncfl.reporting import init_reporting, report_data
+from asyncfl.scheduler_util import SchedulerContext
 
 from .client import Client
 from .dataloader import afl_dataloader, afl_dataset
@@ -12,6 +17,7 @@ from .network import (TextLSTM, flatten, flatten_dict, get_model_by_name,
                       model_gradients, unflatten_dict, unflatten_g)
 
 
+        
 def fed_avg_vec(params: List[np.ndarray]) -> np.ndarray:
     '''
     Use to average the clients weights when representation a N 1 dimensional numpy vectors
@@ -81,6 +87,7 @@ def no_defense_update(params, global_parameters, learning_rate=1.0):
             for var in sum_parameters:
                 # logging.info(f'Key: {key}')
                 sum_parameters[var] = sum_parameters[var] + params[i][var]
+    assert type(sum_parameters) == dict
     for var in sum_parameters:
         if var.split('.')[-1] == 'num_batches_tracked':
             global_parameters[var] = params[0][var]
@@ -100,12 +107,13 @@ def parameters_dict_to_vector_flt(net_dict) -> torch.Tensor:
 
 class Server:
 
-    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005) -> None:
+    def __init__(self, n, f, dataset, model_name: str, learning_rate: float = 0.005, backdoor_args = {}, aux_meta_data = {}, project_name= None, reporting = True) -> None:
         self.g_flat = None
         self.clients = []
         self.n = n
         self.f = f
         self.model_history = [] # Indexed by time t
+        self.model_client_history = {}
         # self.dataset =
         # self.dataset_name = dataset
         # self.test_set = afl_dataset(
@@ -113,6 +121,11 @@ class Server:
         self.device = torch.device(
             'cuda:0') if torch.cuda.is_available() else torch.device('cpu')
         self.network = get_model_by_name(model_name).to(self.device)
+        self.meta_data = {**{
+            'model-name': model_name,
+            'learning-rate': learning_rate,
+        }, **aux_meta_data}
+
         self.learning_rate = learning_rate
         # @TODO: Set learning rate dynamic
         self.optimizer = torch.optim.SGD(
@@ -124,7 +137,7 @@ class Server:
         self.age = 0
         self.lips = {}
         self.bft_telemetry = []
-        self.sched_ctx = None
+        self.sched_ctx : SchedulerContext
         self.is_lstm = isinstance(self.network, TextLSTM)
         self.test_set = afl_dataloader(
             dataset, test_batch_size=100 if self.is_lstm else 400,
@@ -132,7 +145,21 @@ class Server:
             drop_last=self.is_lstm)
 
         # Updated way
-        self.model_history.append(self.get_model_dict_vector())
+        # self.model_history.append(self.get_model_dict_vector())
+        for i in range(n):
+            self.model_client_history[i]=self.get_model_dict_vector()
+        self.test_backdoor = False
+        if backdoor_args != {}:
+            self.test_backdoor = True
+            self.backdoor_args = backdoor_args
+        # print(f'[Server] {project_name=}')
+        assert project_name != None
+        self.wandb_obj = None
+        if reporting == True:
+            self.wandb_obj = init_reporting(project_name, self.__class__.__name__, self.meta_data)
+        # self.init_wandb(project_name)
+
+
 
         # Old way
         # self.model_history.append(self.get_model_weights())
@@ -153,6 +180,19 @@ class Server:
         #         } for i in range(n)
         #     }
         # }
+            
+    # def init_wandb(self, exp_name):
+    #     # @TODO: Init wandb
+    #     print(f'INIT WANDB with {self.meta_data}')
+    #     self.wandb_obj = wandb.init(
+    #         # set the wandb project where this run will be logged
+    #         project=exp_name,
+    #         name= self.__class__.__name__,
+            
+    #         # track hyperparameters and run metadata
+    #         config=self.meta_data,
+    #         settings=wandb.Settings(console="off")
+    #     )
 
     def set_weights(self, weights):
 
@@ -207,11 +247,13 @@ class Server:
     
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[np.ndarray, bool]:
         logging.info(f'Default server dict_vector update of client {client_id}')
-        server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
-
-        model_difference = weight_vec - self.model_history[server_model_age] # Gradient approximation
+        # server_model_age = gradient_age if gradient_age < len(self.model_history) else 0
+        server_model = self.model_client_history[client_id]
+        # model_difference = weight_vec - self.model_history[server_model_age] # Gradient approximation
+        model_difference = weight_vec - server_model # Gradient approximation
         updated_model_vec = no_defense_vec_update([model_difference], self.get_model_dict_vector(), server_rl=self.learning_rate)
-        self.model_history.append(updated_model_vec)
+        # self.model_history.append(updated_model_vec)
+        self.model_client_history[client_id] = updated_model_vec
         self.load_model_dict_vector(updated_model_vec)
         self.incr_age()
         # logging.info(updated_model_vec)
@@ -280,9 +322,12 @@ class Server:
         self.prev_prev_gradients = self.prev_gradients.clone()
         self.prev_gradients = client_gradients.clone()
 
-    def evaluate_model(self):
+    def evaluate_model(self, test_backdoor=False, sim_time=0):
         self.network.eval()
         correct = 0
+        correct_backdoor = 0
+        back_accu = 0
+        back_num = 0
         total = 0
         loss: Any = None
 
@@ -309,11 +354,48 @@ class Server:
                 _, predicted = torch.max(outputs.data, 1)
                 total += targets.size(0)
                 correct += (predicted == targets).sum().item()
+
+                if self.test_backdoor:
+                    assert self.backdoor_args 
+                    # logging.debug(f'{self.backdoor_args=}')
+                    # logging.debug('[SERVER BACKDOOR EVAL].....')
+                    del_arr = []
+                    for k, image in enumerate(inputs):
+                        # logging.debug(f'{k=}, {len(targets)=}, {len(inputs)=}')
+                        # label_val = int(targets_aux[k].cpu().numpy().tolist())
+                        label_val = 4
+                        # logging.debug(f'{label_val=}')
+                        # logging.debug(f'{targets_aux.device=}')
+                        # logging.debug(f'{targets.device=}')
+                        if test_or_not(self.backdoor_args, targets[k]):  # one2one need test
+                            # inputs[k][:, 0:5, 0:5] = torch.max(inputs[k])
+                            inputs[k] = add_trigger(self.backdoor_args,inputs[k], self.device)
+                            save_img(inputs[k])
+                            # logging.debug(f'[BACK DEBUG] changing label from {targets[k]} to { int(self.backdoor_args["attack_label"])}')
+                            targets[k] = int(self.backdoor_args['attack_label'])
+                            back_num += 1
+                        else:
+                            # logging.debug(f'Keeping the label at {targets[k]}')
+                            pass
+                            targets[k] = int(-1)
+                    outputs = self.network(inputs)
+                    # loss += self.network.criterion(outputs, targets).item()
+                    # log_probs = net_g(data)
+                    predicted = outputs.data.max(1, keepdim=True)[1]
+                    # _, predicted = torch.max(outputs.data, 1)
+                    correct_backdoor += predicted.eq(targets.data.view_as(predicted)).long().cpu().sum().item()
+                    # correct_backdoor += (predicted == targets).sum().item()
+        if self.test_backdoor:
+            back_accu = float(correct_backdoor) / back_num
         logging.info(f'Eval --> correct: {correct}, total: {total}')
+        logging.info(f'Eval --> correct_backdoor: {correct_backdoor} ({back_num}), total: {total}')
 
         loss /= total
+        server_acc = correct / total
+        report_data(self.wandb_obj, {'loss': loss, 'acc': server_acc, 'sim_time': sim_time})
+        # wandb.log({'loss': loss, 'acc': server_acc})
 
-        return exp(loss) if hidden else 100. * correct / total, loss
+        return exp(loss) if hidden else 100. * server_acc, loss, back_accu
 
     # def create_clients(self, n, config=None):
     #     compute_times = []

@@ -35,8 +35,8 @@ class FedAsync(Server):
     """
     Staleness Aware SGD: Implmentation of the n-softsync sgd algorithms where lambda == num_workers
     """
-    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, mitigate_staleness = True) -> None:
-        super().__init__(n, f, dataset, model_name, learning_rate)
+    def __init__(self, n, f, dataset: str, model_name: str, learning_rate: float, backdoor_args = {}, project_name = None, aux_meta_data={}, mitigate_staleness = True, reporting = True) -> None:
+        super().__init__(n, f, dataset, model_name, learning_rate, backdoor_args, project_name=project_name, aux_meta_data=aux_meta_data, reporting=reporting)
         self.mitigate_staleness = mitigate_staleness
         self.alpha = self.learning_rate
         # self.alpha = 1
