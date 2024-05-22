@@ -3,6 +3,12 @@
 [![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org/downloads/release/python-380/)
 [![PyPi license](https://badgen.net/pypi/license/pip/)](https://pypi.org/project/pip/)
 
+
+## Submodules
+
+To clone this repository use `git clone --recursive git:/<repo-url>.git`
+
+Or to update including submodules: `git submodule update --init --recursive`
 ## Asynchronous Training
 
 The goal here is to compute the average value of all the client.
