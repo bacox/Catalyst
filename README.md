@@ -78,3 +78,29 @@ To follow the logging output do:
 ```bash
 tail -f debug.log
 ```
+
+### Reproducibility
+
+Experiment scripts for paper results:
+
+- `exp50_mnist`: Figure 3 & MNIST part of Table 1
+- `exp51_cifar10`: Figure 4 & CIFAR-10 part of Table 1
+- `exp52_wikitext2`: Figure 5 & WikiText-2 part of Table 1
+- `exp53_mnist_scaling_all`: Figure 6
+- `exp54_mnist_scaling_byz`: Figure 7
+
+Data table cells and figures:
+- Table 1
+    - `python -m asyncfl.proc_exp exp50_mnist -t 750`
+    - `python -m asyncfl.proc_exp exp51_cifar10 -t 7500`
+    - `python -m asyncfl.proc_exp exp52_wikitext2 -t 750`
+- Figure 3
+    - `python -m asyncfl.proc_exp exp50_mnist -w`
+- Figure 4
+    - `python -m asyncfl.proc_exp exp51_cifar10 -w`
+- Figure 5
+    - `python -m asyncfl.proc_exp exp52_wikitext2 -w`
+- Figure 6
+    - `python -m asyncfl.proc_exp exp53_mnist_scaling_all -c`
+- Figure 7
+    - `python -m asyncfl.proc_exp exp54_mnist_scaling_byz -c`
