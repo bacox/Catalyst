@@ -71,7 +71,7 @@ if __name__ == "__main__":
         var_sets = [
             # {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
-            # {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
+            {"num_clients": 10, "num_byz_nodes": 4, "flame_hist": 3},
         ]
 
         attacks = [
@@ -131,7 +131,7 @@ if __name__ == "__main__":
             # # [AFL.SaSGD,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
             # # [AFL.FedAsync,{'learning_rate': 0.05},],
-            # # [AFL.FedAsync,{'learning_rate': 0.01},],
+            # [AFL.FedAsync,{'learning_rate': 0.01},],
             # # [AFL.FedWait,{'learning_rate': server_lr}],
             # # [AFL.Server,{'learning_rate': server_lr}],
             # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 9, 'aggr_mode': 'median'},'semi-async'],

@@ -13,15 +13,16 @@ from multiprocessing.pool import AsyncResult
 from pathlib import Path
 from threading import Thread
 from typing import Any, List, Tuple, Union
-
+import os
 import numpy as np
 import pandas as pd
 import torch
 from tqdm.auto import tqdm
 import wandb
 from wandb import AlertLevel
+# os.environ["WANDB_SILENT"] = "true"
 
-from asyncfl.reporting import finish_reporting
+from asyncfl.reporting import finish_exp, finish_reporting
 # import logging
 
 logger = logging.getLogger("wandb")
@@ -121,7 +122,14 @@ class Scheduler:
         client_data = [(x, clients["client"], clients["client_args"]) for x in clients["client_ct"]] + [
             (x, clients["f_type"], clients["f_args"]) for x in clients["f_ct"]
         ]
-        num_clients = len(client_data)
+        # Use this line for the wrongly assumed world size. It does not account for the byzaintine clients
+        # num_clients = len(client_data)
+        # Use this line for the correct world size
+        num_clients = len(client_data) - f
+
+        # for x in client_data:
+        #     print(x)
+        # exit()
 
         self.train_set = afl_dataset2(self.dataset_name, data_type="train")
         self.test_set = afl_dataset2(self.dataset_name, data_type="test")
@@ -158,6 +166,7 @@ class Scheduler:
             try:
                 position = self.worker_id
                 for pid, (c_ct, client_class, client_args) in enumerate(client_data):
+                    
                     # print(pid, c_ct, client_class, client_args)
                     node_id = f"c_{pid}"
                     # loading_processes.append(create_client_aux(self, pid, (c_ct, client_class, client_args)))
@@ -615,7 +624,7 @@ class Scheduler:
                     json.dump(completed_runs, f)
                 if lock:
                     lock.release()
-
+            finish_exp(wandb_obj)
             return results, wandb_obj
         except Exception as ex:
             print("Got an exception while running!!")
@@ -632,19 +641,100 @@ class Scheduler:
             configs = [x for x in configs if x['exp_id'] not in keys]
             # @TODO: Append to output instead of overwriting
         return configs
+    
+    @staticmethod
+    def plot_data_distribution_by_time(configs, use_cache=False, filter_byzantine=True, cache_dir='tmp/cache', plot_dir='tmp', plot_name_prefix='data_dist'):
+            from matplotlib import pyplot as plt
+            import seaborn as sns
+
+            # Make sure cache_dir and the plot_dir exists using the Path object
+            Path(cache_dir).mkdir(parents=True, exist_ok=True)
+            Path(plot_dir).mkdir(parents=True, exist_ok=True)
+
+            # Iterate over all configs and generate data distribution
+            for cfg_id, config in enumerate(configs):   
+                print(f'Processing config {cfg_id}')  
+
+                limit = 10
+                if 'limit' in config['clients']['client_args']['sampler_args']:
+                    limit = config['clients']['client_args']['sampler_args']['limit']  
+                # Number of byzantines is
+                num_byz = len(config['clients']['f_ct'])
+                benign_clients = len(config['clients']['client_ct'])
+                total_clients = benign_clients + num_byz
+
+                cache_file = f'{cache_dir}/cache_{cfg_id}.csv'
+                if not use_cache:
+                    distribution_df = Scheduler.get_data_distribution(config)
+                    distribution_df.to_csv(cache_file)
+
+                distribution_df = pd.read_csv(cache_file)
+                compute_times = sorted(distribution_df['compute_time'].unique())
+
+                num_slow_clients = total_clients - (2*num_byz+ 1)
+                fast_ct = compute_times[:2*num_byz+ 1]
+                slow_ct = compute_times[2*num_byz+ 1:]
+
+                distribution_df = distribution_df[distribution_df['lcount'] > 0]
+                new_data = []
+                for idx, row in tqdm(distribution_df.iterrows()):
+                    for i in range(row['lcount']):
+                        new_data.append([row['client'], row['compute_time'], row['byzantine'], row['label'], 1])
+
+                new_df = pd.DataFrame(new_data, columns=['client', 'compute_time', 'byzantine', 'label', 'lcount'])
+
+                # Add client type to new_df based on fast_ct and slow_ct
+                new_df['client_type'] = 'fast'
+                new_df.loc[new_df['compute_time'].isin(slow_ct), 'client_type'] = 'slow'
+                new_df.loc[new_df['byzantine'] == 1, 'client_type'] = 'byzantine'
+
+                # Filter out all byzanitne clients from new_df
+                if filter_byzantine:
+                    new_df = new_df[new_df['byzantine'] == 0]
+
+                file_name = f'{plot_dir}/{plot_name_prefix}_cfg{cfg_id}_l{limit}.png'
+                plt.figure()
+
+                sns.displot(new_df, x='label', hue='client_type', multiple='stack')
+                plt.savefig(file_name)
+                plt.savefig(file_name.replace('.png', '.pdf'), bbox_inches='tight')
+                plt.close()
+                print(f'Graph written to {file_name}')
 
     @staticmethod
     def get_data_distribution(config, num_labels = 10) -> pd.DataFrame:
         worker_id = 0
+        reporting_val = False
+        if 'reporting' in config['server_args']:
+            reporting_val = config['server_args']['reporting']
+            config['server_args']['reporting'] = False
+        
         sched = Scheduler.create_scheduler(config, worker_id)
         summed = 0
         import torch.nn.functional as F
         label_names = [str(x) for x in range(num_labels)]
 
+
+
         data = []
+        cum_size = 0
         for e_id, ent in tqdm([(x,y) for x,y in sched.entities.items() if x.startswith('c')], desc='Iterating clients'):
             ent: Client
             labels = []
+            compute_time = sched.compute_times[int(e_id[2:])]
+
+            # print(f'Client {e_id} has {sched.entities}')
+            # print(f'{sched.compute_times=}')
+
+            # Print the size of the client dataset 
+            # Make sure to also print the cummulative size of the dataset
+            # print(f'{len(ent.train_set.dataset)=}')
+
+            cum_size += len(ent.train_set.dataset) # type: ignore
+
+            # Print the size of the dataset, the cummulative size and the e_id
+            # print(f'{len(ent.train_set.dataset)=}, {cum_size=}, {e_id=}')
+
             for batch_idx, (inputs, labels_tmp) in enumerate(ent.train_set):
                 labels.append(labels_tmp)
             labels = torch.cat(labels, 0).bincount()
@@ -655,7 +745,7 @@ class Scheduler:
             labels = m(labels)
 
             for l_count, l_name in zip(labels.tolist(), label_names):
-                data.append([e_id, ent.is_byzantine, int(l_name), int(l_count)])
+                data.append([e_id, compute_time, ent.is_byzantine, int(l_name), int(l_count)])
 
 
             # data.append([e_id, ent.is_byzantine, *labels.tolist()])
@@ -665,8 +755,12 @@ class Scheduler:
 
             # labels = [x[1][1] for x in enumerate(ent.train_set)]
             summed += len(ent.train_set.dataset.indices)
-        cnames = ['client', 'byzantine', 'label', 'lcount']
+        cnames = ['client', 'compute_time', 'byzantine', 'label', 'lcount']
         df = pd.DataFrame(data, columns= cnames)
+
+        # Restore the reporting value
+        if 'reporting' in config['server_args']:
+            config['server_args']['reporting'] = reporting_val
         return df
 
 
@@ -716,6 +810,7 @@ class Scheduler:
         if outputs[-1]:
 
             last_wandb = outputs[-1][-1]
+            last_wandb = wandb.init(reinit=True)
         print(f'{last_wandb=}')
         print(f"--- Running time of experiment: {(time.time() - start_time):.2f} seconds ---")
         

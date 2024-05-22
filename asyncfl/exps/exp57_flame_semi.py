@@ -83,18 +83,18 @@ if __name__ == "__main__":
         # Sampling labels limit
         limit = 3
         var_sets = [
-            {"num_clients": 40, "num_byz_nodes": 3, "flame_hist": 3},
+            {"num_clients": 40, "num_byz_nodes": 10, "flame_hist": 3},
             # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
             # {"num_clients": 30, "num_byz_nodes": 10, "flame_hist": 3},
             # {"num_clients": 10, "num_byz_nodes": 3, "flame_hist": 3},
         ]
 
         sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': limit }}
-        # sampler = {'sampler': 'uniform', 'sampler_args': {}}
+        uniform_sampler = {'sampler': 'uniform', 'sampler_args': {}}
 
 
         attacks = [
-            [AFL.NGClient, {**{"magnitude": 10}, **sampler}],
+            [AFL.NGClient, {**{"magnitude": 10}, **uniform_sampler}],
             # [
             #     AFL.PixelClient,
             #     {
@@ -218,7 +218,11 @@ if __name__ == "__main__":
                 
                 ct_rest = np.abs(np.random.normal(400, 5, max(b - f2, 0)))
                 ct_clients = np.concatenate((ct_f2, ct_rest), axis=0)
+                ct_clients = sorted(ct_clients)
                 print(f'{len(ct_clients)} and {b=}')
+                # print(sorted(ct_clients))
+                # print(ct_clients)
+                # exit()
                 assert len(ct_clients) == b
                 # ct_clients = np.abs(np.random.normal(1000, 5, num_clients - f))
                 f_ct = np.abs(np.random.normal(200, 5, f))
@@ -304,38 +308,13 @@ if __name__ == "__main__":
 
         # plt.show()
         # exit()
+
+        
+        use_cache = False
+        filter_byzantine = True
+        
         if False:
-            # distribution_df = AFL.Scheduler.get_data_distribution(configs[0])
-            # distribution_df.to_csv('cache.csv')
-
-            distribution_df = pd.read_csv('cache.csv')
-            # distribution_df = distribution_df[distribution_df['client'] == 'c_2'][['label', 'lcount']]
-            # distribution_df = distribution_df[distribution_df['client'].isin(['c_2', 'c_3', 'c_4', 'c_38'])]
-
-            distribution_df = distribution_df[distribution_df['lcount'] > 0]
-            new_data = []
-            for idx, row in tqdm(distribution_df.iterrows()):
-                for i in range(row['lcount']):
-                    new_data.append([row['client'], row['byzantine'], row['label'], 1])
-
-            new_df = pd.DataFrame(new_data, columns=['client', 'byzantine', 'label', 'lcount'])
-
-            print(distribution_df.dtypes)
-
-            print(distribution_df)
-            
-            print('plotting')
-            plt.figure()
-
-            sns.displot(new_df, x='label', hue='byzantine', multiple='stack')
-            # sns.catplot(distribution_df, x='byzantine', y='lcount', kind='bar')
-
-
-            plt.savefig('data_dist2.png')
-            # plt.show()
-
-            print(new_df[['client', 'lcount']].groupby(['client']).sum())
-            print(new_df.groupby(['byzantine']).sum())
+            AFL.Scheduler.plot_data_distribution_by_time(configs, use_cache=use_cache, filter_byzantine=filter_byzantine)
             exit()
 
         # wandb.init(
@@ -359,6 +338,8 @@ if __name__ == "__main__":
             multi_thread=multi_thread,
             autocomplete=args.autocomplete,
         )
+
+        
     wandb.finish()
     # Load raw data from file
     outputs2 = ""

@@ -94,9 +94,12 @@ class N_Labels(DistributedSamplerWrapper):
     """
     A sampler that limits the number of labels per client
     The number of clients must <= than number of labels
+
+    use_client_order = True: The labels are distributed in a way that each client gets a set of labels in order
+    use_client_order = False: The labels are distributed in a way that each client gets a set of labels in random order
     """
 
-    def __init__(self, dataset, num_replicas, rank, seed, limit=10):
+    def __init__(self, dataset, num_replicas, rank, seed, limit=10, use_client_order=True):
         super().__init__(dataset, num_replicas, rank, seed)
 
         num_copies = np.ceil((limit * self.n_clients) / self.n_labels)
@@ -106,12 +109,37 @@ class N_Labels(DistributedSamplerWrapper):
         clients = list(range(self.n_clients))  # keeps track of which clients should still be given a label
         client_label_dict = {}
         ordered_list = list(range(self.n_labels)) * int(num_copies)
-        # Now code
-        for idx, client_id in enumerate(clients):
-            label_set = []
-            for _ in range(limit):
-                label_set.append(ordered_list.pop())
-            client_label_dict[client_id] = label_set
+
+        # if False:
+        #     # New code
+        #     # print(f'{ordered_list=}')
+        #     # TODO: Change the code here to create difficult scenario
+        #     for idx, client_id in enumerate(clients):
+        #         label_set = []
+        #         for _ in range(limit):
+        #             label_set.append(ordered_list.pop())
+        #         client_label_dict[client_id] = label_set
+        # else:
+        if use_client_order:
+            ordered_list = sorted(ordered_list)
+            # print(f'{ordered_list=}')
+            # create a dictionary of clients and their labels with empty lists as values
+            client_label_dict = {i: [] for i in range(self.n_clients)}
+
+            while len(ordered_list) > 0:
+                for client_id in range(self.n_clients):
+                    if len(ordered_list) == 0:
+                        break
+                    client_label_dict[client_id].append(ordered_list.pop())
+        else:
+            # New code
+            # print(f'{ordered_list=}')
+            # TODO: Change the code here to create difficult scenario
+            for idx, client_id in enumerate(clients):
+                label_set = []
+                for _ in range(limit):
+                    label_set.append(ordered_list.pop())
+                client_label_dict[client_id] = label_set
 
         client_label_dict['rest'] = []
         # New code
@@ -130,6 +158,7 @@ class N_Labels(DistributedSamplerWrapper):
         indices_per_client = {}
         for c in clients:
             indices_per_client[c] = []
+        # print(f'{reverse_label_dict=}')
 
         rest_indices = []
         for group, label_list in enumerate(ordered_by_label):

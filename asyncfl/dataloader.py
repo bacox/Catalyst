@@ -54,12 +54,16 @@ def afl_dataloader(dataset, train_batch_size=50,
     sampler_args={},
     drop_last=False
     ) -> DataLoader:
+
+    # Print the number of clients
+    # print(f'[AFL DL] ({client_id}) Number of clients: {n_clients}')
+
     if sampler == 'dirichlet':
         logging.info('Using dirichlet sampler')
         ds = DirichletSampler(dataset, n_clients, client_id, (sampler_args))
         indices = ds.indices
     elif sampler == 'nlabels':
-        logging.info('Using N Labels sampler')
+        logging.info('Using nlabels sampler')
         ds = N_Labels(dataset, n_clients, client_id, seed=seed, **sampler_args)
         indices = ds.indices
     elif sampler == 'limitlabelflex':

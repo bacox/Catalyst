@@ -42,6 +42,8 @@ class FlameNaiveBaseline(Server):
         self.enable_scaling_factor = enable_scaling_factor
         self.impact_delayed = impact_delayed
         self.alg_version = alg_version
+        self.discarded_updates = 0
+        self.discarded_ptr = 0
     
     def remove_oldest_k(self, pending: dict):
         oldest = min(pending.keys())
@@ -49,7 +51,7 @@ class FlameNaiveBaseline(Server):
         return pending
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[Union[np.ndarray, None], bool]:
-        logging.info(f'[NaiveFlame {self.alg_version}] processing client {client_id} :: {is_byzantine=}')
+        logging.info(f'[NaiveFlame {self.alg_version}] processing client {client_id} :: {is_byzantine=} :: {gradient_age=} :: {self.age=}')
         if self.alg_version == 'A':
             return self.weight_update_A(client_id, weight_vec, gradient_age, is_byzantine)
         elif self.alg_version == 'B':
@@ -83,6 +85,7 @@ class FlameNaiveBaseline(Server):
             self.load_model_dict_vector(updated_weights)
             has_aggregated = True
             self.pending_weights = []
+            self.age += 1
         report_data(self.wandb_obj, {'pending_updates': len(self.pending_weights), 'alg_version': self.alg_version})
         return self.get_model_dict_vector(), has_aggregated
 
@@ -111,6 +114,7 @@ class FlameNaiveBaseline(Server):
             self.load_model_dict_vector(updated_weights)
             has_aggregated = True
             self.pending = {}
+            self.age += 1
         report_data(self.wandb_obj, {'pending_updates': len(self.pending), 'alg_version': self.alg_version})
         return self.get_model_dict_vector(), has_aggregated
 
@@ -126,10 +130,16 @@ class FlameNaiveBaseline(Server):
         if self.age == gradient_age:
             self.byz_client_hist.append(is_byzantine)
             self.pending[client_id] = weight_vec
+        else:
+            logging.info(f'[NaiveFlame {self.alg_version}] Discarding update from {client_id} because of age mismatch. {gradient_age=}, {self.age=}')
+            self.discarded_updates += 1
+            return self.get_model_dict_vector(), has_aggregated
 
-
+        unique_discarded = 0
         if len(self.pending) >= self.aggregation_bound:
+            logging.info(f'[NaiveFlame] <!!> Start Aggregation {self.age=}')
             client_weights = list(self.pending.values())
+            client_ids = list(self.pending.keys())
             # frac_byz = sum(self.byz_client_hist[-self.aggregation_bound:]) / float(len(self.byz_client_hist[-self.aggregation_bound:]))
             frac_byz = '?'
             logging.info(f'[NaiveFlame {self.alg_version}] {len(client_weights)=}, percentage byzantine: {frac_byz}')
@@ -140,7 +150,20 @@ class FlameNaiveBaseline(Server):
             self.load_model_dict_vector(updated_weights)
             has_aggregated = True
             self.pending = {}
-        report_data(self.wandb_obj, {'pending_updates': len(self.pending), 'alg_version': self.alg_version})
+            self.age += 1
+            discarded_updates_since_last_aggregation = self.discarded_updates - self.discarded_ptr
+            unique_discarded = self.n - len(client_ids)
+            logging.info(f'[NaiveFlame {self.alg_version}] Aggregated {len(client_weights)=}, percentage byzantine: {frac_byz}, {unique_discarded=}, {discarded_updates_since_last_aggregation=}')
+            
+        else:
+            logging.info(f'[NaiveFlame {self.alg_version}] Waiting for more updates {len(self.pending)=} / {self.aggregation_bound}')
+        if has_aggregated:
+            
+            report_data(self.wandb_obj, {'pending_updates': len(self.pending), 'alg_version': self.alg_version, 'num_discarded': self.discarded_updates, 'unique_discarded': unique_discarded, 'used_clients': len(client_ids), 'discarted_for_agg': discarded_updates_since_last_aggregation, 'used_clip_value': clip_value})
+            self.discarded_ptr = self.discarded_updates
+        else:
+            report_data(self.wandb_obj, {'pending_updates': len(self.pending), 'alg_version': self.alg_version, 'num_discarded': self.discarded_updates})
+        
         return self.get_model_dict_vector(), has_aggregated
 
     def weight_update_C(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[Union[np.ndarray, None], bool]:
@@ -171,6 +194,7 @@ class FlameNaiveBaseline(Server):
                 self.sched_ctx.send_model_to_client(d, self.get_model_dict_vector(), self.age + 1) #type: ignore
                 self.sched_ctx.move_client_to_compute_mode(d) #type: ignore 
             report_data(self.wandb_obj, {'pending_updates': len(self.pending), 'alg_version': self.alg_version})
+            self.age += 1
             return self.get_model_dict_vector(), has_aggregated
         
         else:

@@ -42,8 +42,14 @@ class Client:
         self.convergance = 0
         self.is_byzantine = False
         self.is_lstm = isinstance(self.network, TextLSTM)
+
+        dataset_client_id = pid
+        if dataset_client_id >= num_clients:
+            # Use modulo to get the client id
+            dataset_client_id = dataset_client_id % num_clients
+            
         self.train_set = afl_dataloader(
-            dataset, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler,
+            dataset, use_iter=False, client_id=dataset_client_id, n_clients=num_clients, sampler=sampler,
             sampler_args=sampler_args, drop_last=self.is_lstm)
 
         self.prev_weights =  torch.zeros_like(self.w_flat)
@@ -127,7 +133,8 @@ class Client:
     #     # self.optimizer.zero_grad()
 
     #     # print('Finished training')
-
+    def report_loss_during_training(self, loss):
+        pass
 
     def train(self, num_batches = -1, local_epochs = 1):
         # @TODO: Increment local_age
@@ -163,7 +170,11 @@ class Client:
                 else:
                     outputs = self.network(inputs)
                 loss = self.network.criterion(outputs, labels)
+                self.report_loss_during_training(loss)
                 loss.backward()
+                # Do this for the Gradient inversion byzantine client?
+                clip = 5
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(),clip)
                 flatten_g(self.network, g_flat_local)
                 # g_flat_local.g_flat.mul_(self.lr)
                 self.g_flat.add_(g_flat_local)

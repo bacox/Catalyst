@@ -72,19 +72,17 @@ if __name__ == "__main__":
         # num_clients = 10
         ff = 10
         # Sampling labels limit
-        limit = 2
+        # limit = 2
 
         # Variable parameters
         niid_limit_var = [2,4,6,8,10]
+        niid_limit_var.reverse()
         byz_frac_var = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
-
-        num_clients = [40]
+        num_clients_var = [40]
 
         # Static params
         flame_hist = 3
 
-        for frac in [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]:
-            print(int(frac * 40))
 
         # var_sets = [
         #     {"num_clients": 40, "num_byz_nodes": 1, "flame_hist": 3},
@@ -101,64 +99,14 @@ if __name__ == "__main__":
 
 
         attacks = [
-            [AFL.NGClient, {**{"magnitude": 10}, **sampler}],
-            [AFL.NGClient, {**{"magnitude": 10}}],
-            # [
-            #     AFL.PixelClient,
-            #     {
-            #         "sampler": "uniform",
-            #         "sampler_args": {},
-            #         "backdoor_args": {
-            #             "attack_label": 1,
-            #             "attack_goal": 3,
-            #             "attack": "dba",
-            #             "trigger": "pattern",
-            #             "triggerX": 22,
-            #             "triggerY": 22,
-            #             # "poison_frac": 0.2,
-            #             "poison_frac": 1.0,
-            #         },
-            #     },
-            # ],
+            # [AFL.NGClient, {**{"magnitude": 10}, **sampler}],
+            [AFL.NGClient, {**{"magnitude": 10}}],            
         ]
 
         servers = [
-            # [
-            #     AFL.Kardam,
-            #     {
-            #         "learning_rate": server_lr,
-            #         "damp_alpha": 0.1,
-            #         "use_fedasync_alpha": False,
-            #         "use_fedasync_aggr": True,
-            #         "use_lipschitz_server_approx": False,
-            #     },
-            #     'semi-async'
-            # ],
-            # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
-            # [AFL.FedAsync, {"learning_rate": server_lr}, "semi-async"],
             [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True, 'reporting': reporting}, 'semi-async'],
-            # [
-            #     AFL.FlameNaiveBaseline,
-            #     {
-            #         "learning_rate": server_lr, 
-            #         "k": 3, 
-            #         "disable_alpha": True,
-            #         "alg_version": 'B',
-            #         'reporting': reporting
-            #     },
-            #     "semi-async",
-            # ],
-            # [
-            #     AFL.FlameNaiveBaseline,
-            #     {
-            #         "learning_rate": server_lr, 
-            #         "k": 3, 
-            #         "disable_alpha": True,
-            #         "alg_version": 'A',
-            #         'reporting': reporting
-            #     },
-            #     "semi-async",
-            # ],
+            # [AFL.FlameNaiveBaseline,{"learning_rate":server_lr,"k":3,"disable_alpha":True,"alg_version":'B','reporting':reporting},"semi-async",],
+            # [AFL.FlameNaiveBaseline,{"learning_rate":server_lr,"k":3,"disable_alpha":True,"alg_version":'A','reporting':reporting},"semi-async",],
             [
                 AFL.FlameNaiveBaseline,
                 {
@@ -170,49 +118,8 @@ if __name__ == "__main__":
                 },
                 "semi-async",
             ],
-            # [
-            #     AFL.FlameNaiveBaseline,
-            #     {
-            #         "learning_rate": server_lr, 
-            #         "k": 3, 
-            #         "disable_alpha": True,
-            #         "alg_version": 'C',
-            #         'reporting': reporting
-            #     },
-            #     "semi-async",
-            # ],
-
-
-            # [
-            #     AFL.PessimisticServer,
-            #     {
-            #         "learning_rate": server_lr,
-            #         "k": 6,
-            #         "disable_alpha": False,
-            #         "impact_delayed": 1.0,
-            #         "enable_scaling_factor": False,
-            #         "aggregation_bound": 10,
-            #     },
-            #     "semi-async",
-            # ],
-            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 6, "disable_alpha": True}, 'semi-async'],
-
-            # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 6, "disable_alpha": False, 'impact_delayed': 1.0, 'enable_scaling_factor': False}, 'semi-async'],
-            # [
-            #     AFL.PessimisticServer,
-            #     {"learning_rate": server_lr, "k": 3, "aggregation_bound": 40, "disable_alpha": False},
-            #     'semi-async'
-            # ],
-            # # [AFL.SaSGD,{'learning_rate': server_lr}],
-            # # [AFL.Server,{'learning_rate': server_lr}],
-            # # [AFL.FedAsync,{'learning_rate': 0.05},],
-            # # [AFL.FedAsync,{'learning_rate': 0.01},],
-            # # [AFL.FedWait,{'learning_rate': server_lr}],
-            # # [AFL.Server,{'learning_rate': server_lr}],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 9, 'aggr_mode': 'median'},'semi-async'],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15, 'aggr_mode': 'median'},'semi-async'],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 15},'async'],
-            # [AFL.BASGD,{'learning_rate': server_lr, 'num_buffers': 10, 'aggr_mode': 'trmean'},'async'],
+            # [AFL.FlameNaiveBaseline,{"learning_rate":server_lr,"k":3,"disable_alpha":True,"alg_version":'C','reporting':reporting},"semi-async",],
+            # [AFL.PessimisticServer,{"learning_rate":server_lr,"k":6,"disable_alpha": False,"impact_delayed":1.0,"enable_scaling_factor": False,"aggregation_bound": 10,},"semi-async",],
         ]
 
         f0_keys = []
@@ -220,11 +127,13 @@ if __name__ == "__main__":
 
         # @TODO: BASGD alg works with gradients. In the implementation we use weights. This is a difference.
 
-        for _r, server, var_set, atk in itertools.product(range(repetitions), servers, var_sets, attacks):
-
-
-
-            num_clients, f, fh = var_set.values()
+        for _r, server, atk, niid_limit, byz_frac, num_clients in itertools.product(range(repetitions), servers, attacks, niid_limit_var, byz_frac_var, num_clients_var):
+            
+            sampler = {'sampler': 'nlabels', 'sampler_args': {'limit': niid_limit }}
+            atk[1]['sampler'] = sampler
+            fh = flame_hist
+            f = int(byz_frac * num_clients)
+            # num_clients, f, fh = var_set.values()
             ct_key = f"{num_clients}-{f}-{fh}-{_r}"
             # f = ff
             # print(n, f, fh)
@@ -299,7 +208,7 @@ if __name__ == "__main__":
                         # "client_args": {"learning_rate": server_lr, "sampler": "uniform", "sampler_args": {}},
                         "client_ct": ct_clients,
                         "n": num_clients,
-                        "f": f,
+                        "f": max(f, 1),
                         # 'f': f,
                         "f_type": atk[0],
                         "f_args": atk[1],
@@ -310,11 +219,12 @@ if __name__ == "__main__":
                     "dataset_name": dataset,
                     "model_name": model_name,
                     "meta_data": {
-                        'non_iid_limit': limit,
+                        'non_iid_limit': niid_limit,
                         'num_byz_nodes': f
                         }
                 }
             )
+
 
         # for cfg in configs:
         #     print(dict_hash(cfg, exclude_keys=['exp_id']))

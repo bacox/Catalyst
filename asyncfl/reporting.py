@@ -7,6 +7,8 @@ logger.setLevel(logging.ERROR)
 
 
 def init_reporting(exp_name: str, name: str, meta_data:dict = {}) -> wandb_sdk.wandb_run.Run:
+    logging.info(f'Reporting with metadata: {meta_data}')
+    print(f'Reporting [{name}] with metadata: {meta_data}')
     return wandb.init(
         # set the wandb project where this run will be logged
         project=exp_name,
@@ -20,7 +22,14 @@ def report_data(wandb_obj: Union[wandb_sdk.wandb_run.Run, None], data: dict):
     if wandb_obj:
         wandb_obj.log(data)
 
+def finish_exp(wandb_obj: wandb_sdk.wandb_run.Run):
+    if wandb_obj:
+        wandb_obj.finish(quiet=True)
+    else:
+        logging.warning('No wandb object to finish')
+
 def finish_reporting(wandb_obj: wandb_sdk.wandb_run.Run, exp_name: str, message: str):
+    
     logging.info(message)
     if wandb_obj:
         wandb_obj.alert(

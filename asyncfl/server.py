@@ -152,7 +152,7 @@ class Server:
         if backdoor_args != {}:
             self.test_backdoor = True
             self.backdoor_args = backdoor_args
-        print(f'[Server] {project_name=}')
+        # print(f'[Server] {project_name=}')
         assert project_name != None
         self.wandb_obj = None
         if reporting == True:

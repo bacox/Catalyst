@@ -184,7 +184,7 @@ def flame_v3_clipbound(local_models: List[np.ndarray]) -> Tuple[float, np.ndarra
     clip_value = float(np.median(norm_list))
     return clip_value, norm_list
 
-def flame_v3_filtering(local_models: List[np.ndarray], min_cluster_size = -1):
+def flame_v3_filtering(local_models: List[np.ndarray], min_cluster_size = -1) -> Tuple[List[np.ndarray], List[int]]:
     # logging.info(f'[FLv3] {local_models=}')
     assert len(local_models) > 1
     local_models_t = [torch.from_numpy(x).cuda() for x in local_models] #type: ignore
