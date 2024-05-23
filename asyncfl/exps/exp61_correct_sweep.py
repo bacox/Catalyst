@@ -369,6 +369,15 @@ if __name__ == "__main__":
     aggregation_events_df = pd.concat(aggr_dfs, ignore_index=True)
 
 
+    print(server_df.columns)
+
+    print(server_df.groupby(['alg_name', 'num_clients', 'f']).mean().reset_index())
+
+    print(server_df['f'].unique())
+    print(server_df['iterx'].unique())
+    print(server_df.groupby(['iterx']).count().reset_index())
+
+
     # print(server_df.columns)
     # for idx, row in server_df[server_df['alg_name'] == 'Kardam'][['round', 'alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
     # # for idx, row in server_df.groupby(['alg_name', 'round']).median().reset_index()[['alg_name', 'backdoor_accuracy', 'accuracy']].iterrows():
@@ -445,12 +454,69 @@ if __name__ == "__main__":
         graph_file = graphs_path / f"{exp_name}_b{n_byz}_wall_time.png"
         print(f"Generating plot: {graph_file}")
         local_df = merged
+
+        print(local_df.columns)
+        print(local_df.head())
+        # Find maximum value of wall_time
+        print('Devider')
+        print(local_df.groupby('name').max())
+        # Find shortest interval between wall_time when grouped by iterx
+        print(local_df[['wall_time', 'iterx', 'name']].groupby(['iterx', 'name']).diff().min())
+
+        # Convert wall_time to string
+        local_df['wall_time'] = local_df['wall_time'].astype(str)
+
+        # Convert wall_time to datetime with format %S
+        # local_df['Time'] = pd.to_datetime(local_df['wall_time'], format='%S').dt.time
+        local_df['time'] = pd.to_datetime(local_df['wall_time'], unit='ms')
+
+        print(local_df.head(10))
+        # Convert wall_time to float
+        local_df['wall_time'] = local_df['wall_time'].astype(float)
+
+        
+        print('Breaker')
+
+        # Resample to 1 second intervals for each iterx
+        local_df = local_df.set_index('time').groupby(['iterx', 'name']).resample('1S').mean().reset_index()
+        # Convert column time to seconds
+        local_df['time'] = local_df['time'].dt.second * 1000
+
+        # Replace the value of name to Flame if the name starts with Flame
+        local_df['name'] = local_df['name'].apply(lambda x: 'Flame' if x.startswith('Flame') else x)
+        # Replace the value of name to Catalyst if the name starts with SemiAsync
+        local_df['name'] = local_df['name'].apply(lambda x: 'Catalyst' if x.startswith('SemiAsync') else x)
+
+
+        # Ask the user for yes or no to save the data to a csv file
+        answer = input("Save data to csv?")
+        # Get current file path
+        out_path = Path(__file__).parent.parent.parent / 'data-processing' / 'data'
+        print(out_path.absolute())
+        if answer.upper() in ["Y", "YES"]:
+            file_loc = out_path / f'wall_time_catalyst_vs_flame.csv'
+            print('Saving data to csv')
+            local_df.to_csv(file_loc)
+            # Print the file location
+        else:
+            print('Not saving data to csv')
+    
+        print(local_df.head(10))
         if len(local_df):
             plt.figure(figsize=fig_size)
-            g = sns.lineplot(data=local_df, x="wall_time", y="accuracy", hue="name")
+            g = sns.lineplot(data=local_df, x="time", y="accuracy", hue="name", errorbar=('ci', 50))
+
             # g = sns.FacetGrid(local_df, col="alg_name",  row="num_clients", hue='use_lipschitz_server_approx', aspect=2)
             # g.map(sns.lineplot, "round", "accuracy")
+            # Remove the legend title but keep the legend and the entries
+            if g.legend_:
+                g.legend_.set_title(None)
+                
             # g.add_legend()
+            # Max x value is 50000
+            # Change the legend to the name of the algorithm
+            
+            plt.xlim(0, 50000)
             plt.savefig(graph_file)
         else:
             print(f"Not plotting due to empty dataframe")

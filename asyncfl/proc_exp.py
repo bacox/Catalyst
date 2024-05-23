@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
 from typing import Literal
-
+import pickle
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -87,6 +87,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
     # sns.lineplot(data=res_dfs.interaction_events_df, x="Wall Time", y="Round", hue="alg")
     # print(f"Saving figure at {graph_file}")
     # plt.savefig(graph_file, bbox_inches="tight")
+    
 
     s_df_groupby = res_dfs.server_df.groupby(["byz_type", "f", "n"], as_index=False, sort=False)
 
@@ -95,7 +96,7 @@ def plot_wtime(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) -> N
             str.maketrans({" ": "", "\N{GREEK SMALL LETTER ALPHA}": "a"}))
         fname_prefix = f"{exp_name}_{byz_type_norm}_f{f}_n{n}"
         s_df["sv"] = s_df["alg"].str.split().str.get(0)
-
+        
         graph_file = graphs_path / f"{fname_prefix}_rounds.png"
         print(f"Generating plot: {graph_file}")
         plt.figure(figsize=fig_size)
@@ -186,6 +187,7 @@ def plot_clients(res_dfs: ResultDataFrames, graphs_path: Path, exp_name: str) ->
     png_file = graphs_path / f"{exp_name}_scalability_{'all' if is_one_scale else 'byz'}.png"
     print(f"Generating plot: {graph_file}")
     print(f"Generating plot: {png_file}")
+
     plt.figure(figsize=fig_size)
     g = sns.pointplot(data=df, x=x, y="Accuracy", hue="alg", seed=SEED, formatter=formatter)
     g.get_legend().set_title(None)
@@ -205,6 +207,19 @@ def main() -> None:
 
     res_dfs = prepare_dfs(Path(".data") / f"{args.exp_name}.json")
 
+    # Ask the user for yes or no to save the data to a csv file
+    answer = input("Save data to csv? (Y/N): ")
+    # Get current file path
+    out_path = Path(__file__).parent.parent / 'data-processing' / 'data'
+    print(out_path.absolute())
+    if answer.upper() in ["Y", "YES"]:
+        file_loc = out_path / f'{args.exp_name}.pkl'
+        print('Saving data to pickle')
+        with open(file_loc, 'wb') as f:
+            pickle.dump(res_dfs, f)
+        # Print the file location
+    else:
+        print('Not saving data to pickle')
     if args.w:
         plot_wtime(res_dfs, graphs_path, args.exp_name)
 
