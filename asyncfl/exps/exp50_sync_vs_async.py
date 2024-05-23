@@ -413,6 +413,19 @@ if __name__ == "__main__":
 
         print(local_df)
 
+        # Ask the user for yes or no to save the data to a csv file
+        answer = input("Save data to csv?")
+        # Get current file path
+        out_path = Path(__file__).parent.parent.parent / 'data-processing' / 'data'
+        print(out_path.absolute())
+        if answer.upper() in ["Y", "YES"]:
+            file_loc = out_path / f'exp50_sync_vs_async.csv'
+            print('Saving data to csv')
+            local_df.to_csv(file_loc)
+            # Print the file location
+        else:
+            print('Not saving data to csv')
+
         if len(local_df):
             plt.figure(figsize=fig_size)
             g = sns.lineplot(data=local_df, x="wall_time", y="accuracy", hue="agg_type")

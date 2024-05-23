@@ -404,6 +404,20 @@ if __name__ == "__main__":
         graph_file_pdf = graphs_path / f"{exp_name}_b{n_byz}_wall_time.pdf"
         print(f"Generating plot: {graph_file}")
         local_df = merged
+
+        # Ask the user for yes or no to save the data to a csv file
+        answer = input("Save data to csv? (Y/N): ")
+        # Get current file path
+        out_path = Path(__file__).parent.parent.parent / 'data-processing' / 'data'
+        print(out_path.absolute())
+        if answer.upper() in ["Y", "YES"]:
+            file_loc = out_path / f'exp52_client_ct_skew.csv'
+            print('Saving data to csv')
+            local_df.to_csv(file_loc)
+            # Print the file location
+        else:
+            print('Not saving data to csv')
+
         skew_hue_order = [f'{float(x)}x' for x in [1,2,3,4,8,12]]
         l_df = local_df[local_df['round'] <= 50]
         if len(l_df):
