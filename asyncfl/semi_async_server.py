@@ -99,11 +99,15 @@ class SemiAsync(Server):
                 # Recal fast clients?
                 logging.debug(f'Recalling fast clients: {list(set(self.fast_clients))}')
                 # logging.debug(f'{self.sched_ctx.clients_adm["computing"]}')
-                for cc in [x for x in self.sched_ctx.clients_adm['computing'] if x[2]]:
+                logging.info(f'Scheduled clients: {self.sched_ctx.clients_adm["computing"]}')
+                for cc in [x for x in self.sched_ctx.clients_adm['computing'] if x[2]]: # if x[2] is True, then it is a partial computation
                     proportional_train_time = min((self.sched_ctx.wall_time - cc[3])/ cc[0], 1)
                     self.sched_ctx.client_partial_training(cc[2], proportional_train_time)
                     # client_i: Client = 
                     self.sched_ctx.move_client_to_idle_mode(cc[2]) #type:ignore
+
+                    # Remove cc from fast clients
+                    
 
                     # Put data in bucket 
 
@@ -198,7 +202,13 @@ class SemiAsync(Server):
                     'num_benign': len(benign_client_ids),
                     'num_used': len(accepted_client_ids),
                     'num_rejected': len(rejected_client_ids),
-                    'age': self.age
+                    'age': self.age,
+                    'num_idle': len(self.idle_clients),
+                    'num_fast': len(self.fast_clients),
+                    'num_pending': len(self.pending[self.age]),
+                    'n_computing': len(self.sched_ctx.clients_adm['computing']),
+                    'n_idle': len(self.sched_ctx.clients_adm['idle']),
+
 
                 }
                 report_data(self.wandb_obj, gt_data)
@@ -250,6 +260,7 @@ class SemiAsync(Server):
 
                 # self.idle_clients.append(client_id)
                 # logging.debug('Pre compute')
+                logging.info(f'Size of idle clients pre: {len(self.idle_clients)}')
                 for d in self.idle_clients:
                     # Send model to client
                     # logging.debug(f'[Pess] Moving client {d} to compute')
@@ -257,6 +268,7 @@ class SemiAsync(Server):
                     self.sched_ctx.move_client_to_compute_mode(d) #type: ignore 
 
                 self.idle_clients = []
+                logging.info(f'Size of idle clients post: {len(self.idle_clients)}')
                 del_key = self.age - self.k + 1
                 if del_key in self.processed:
                     del self.processed[self.age - self.k + 1]

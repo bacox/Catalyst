@@ -57,7 +57,7 @@ if __name__ == "__main__":
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 5
+        pool_size = 1
         configs = []
         dist_check = False
         dist_check_exit = False
@@ -132,16 +132,16 @@ if __name__ == "__main__":
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr, 'reporting': reporting}, "semi-async"],
             [AFL.SemiAsync, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
-            [AFL.FlameNaiveBaseline,
-                {
-                    "learning_rate": server_lr, 
-                    "k": 1, 
-                    "disable_alpha": True,
-                    "alg_version": 'B2',
-                    'reporting': reporting
-                },
-                "semi-async"
-            ]
+            # [AFL.FlameNaiveBaseline,
+            #     {
+            #         "learning_rate": server_lr, 
+            #         "k": 1, 
+            #         "disable_alpha": True,
+            #         "alg_version": 'B2',
+            #         'reporting': reporting
+            #     },
+            #     "semi-async"
+            # ]
             # [
             #     AFL.FlameNaiveBaseline,
             #     {

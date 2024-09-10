@@ -28,12 +28,14 @@ if __name__ == "__main__":
 
     if not args.o:
         multi_thread = True
-        pool_size = 6
+        pool_size = 1
         model_name = "mnist-cnn"
         dataset = "mnist"
         num_rounds = 30
-        repetitions = 3
+        repetitions = 1
         lr_all = 0.05
+        reporting = True
+
 
         var_sets = [
             {
@@ -72,56 +74,57 @@ if __name__ == "__main__":
         ]
 
         servers = [
-            [
-                AFL.FedAsync,
-                {
-                    "learning_rate": lr_all,
-                    "mitigate_staleness": True
-                },
-                "async"
-            ],
-            [
-                AFL.Kardam,
-                {
-                    "learning_rate": lr_all,
-                    "damp_alpha": 0.1,
-                    "use_fedasync_alpha": False,
-                    "use_fedasync_aggr": True,
-                    "use_lipschitz_server_approx": False
-                },
-                "async"
-            ],
-            [
-                AFL.BASGD,
-                {
-                    "learning_rate": lr_all,
-                    "num_buffers": lambda f, _n: 2 * f + 1,
-                    "aggr_mode": "median"
-                },
-                "async"
-            ],
-            [
-                AFL.PessimisticServer,
-                {
-                    "learning_rate": lr_all,
-                    "k": 5,
-                    "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
-                    "disable_alpha": True,
-                    "enable_scaling_factor": False,
-                    "impact_delayed": 1.0
-                },
-                "semi-async"
-            ],
             # [
-            #     AFL.SemiAsync,
+            #     AFL.FedAsync,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "mitigate_staleness": True
+            #     },
+            #     "async"
+            # ],
+            # [
+            #     AFL.Kardam,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "damp_alpha": 0.1,
+            #         "use_fedasync_alpha": False,
+            #         "use_fedasync_aggr": True,
+            #         "use_lipschitz_server_approx": False
+            #     },
+            #     "async"
+            # ],
+            # [
+            #     AFL.BASGD,
+            #     {
+            #         "learning_rate": lr_all,
+            #         "num_buffers": lambda f, _n: 2 * f + 1,
+            #         "aggr_mode": "median"
+            #     },
+            #     "async"
+            # ],
+            # [
+            #     AFL.PessimisticServer,
             #     {
             #         "learning_rate": lr_all,
             #         "k": 5,
             #         "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
             #         "disable_alpha": True,
+            #         "enable_scaling_factor": False,
+            #         "impact_delayed": 1.0
             #     },
             #     "semi-async"
-            # ]
+            # ],
+            [
+                AFL.SemiAsync,
+                {
+                    "learning_rate": lr_all,
+                    "k": 5,
+                    "aggregation_bound": lambda f, _n: max(2, 2 * f + 1),
+                    "disable_alpha": True,
+                    'reporting': reporting
+                },
+                "semi-async"
+            ]
         ]
 
         generated_ct = {}
