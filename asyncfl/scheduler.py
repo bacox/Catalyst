@@ -427,7 +427,9 @@ class Scheduler:
             # The server sends models to clients
             # The server let the scheduler know if the client should wait or not
             # We also need to know if the server aggregated or not
-
+            
+            # Log the current wall time
+            logging.info(f'Wall time: {wall_time}')
             if type(server) == Kardam:
                 res, has_aggregated = server.client_weight_dict_vec_update(c_id, next_client.get_model_dict_vector(),next_client.local_age, is_byzantine, next_client.lipschitz)
             else:

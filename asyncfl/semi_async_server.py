@@ -41,6 +41,17 @@ class SemiAsync(Server):
         self.clipbounds = {} # S
         self.k = k
         self.aggregation_bound = aggregation_bound
+
+
+        self.lat = 0 # Last aggregation timestamp
+        # Set estimated round time to infinity
+        self.ert = math.inf
+
+        self.client_start_timestamps = {i: 0 for i in range(self.n)}
+
+        logging.info(f' self.client_start_timestamps= {self.client_start_timestamps=}')
+
+
         if self.aggregation_bound == None:
             # self.aggregation_bound = n
             self.aggregation_bound = 2 * f + 1
@@ -91,25 +102,62 @@ class SemiAsync(Server):
 
     def handle_slow_clients(self, gradient_age: int, client_id: int, weight_vec: np.ndarray, is_byzantine: bool):
         if self.age - self.k <  gradient_age < self.age - 1:
-                # self.pending[gradient_age][client_id] = weight_vec   
-                self.pending[gradient_age][client_id] = (weight_vec, is_byzantine)         
-            # Send w to client
-            self.sched_ctx.send_model_to_client(client_id, self.get_model_dict_vector(), self.age) #type: ignore
+            # self.pending[gradient_age][client_id] = weight_vec   
+            self.pending[gradient_age][client_id] = (weight_vec, is_byzantine)         
+        # Send w to client
+        self.sched_ctx.send_model_to_client(client_id, self.get_model_dict_vector(), self.age) #type: ignore
 
-    def handle_fast_clients(self, client_id: int, weight_vec: np.ndarray):
+    def handle_fast_clients(self, client_id: int, weight_vec: np.ndarray, cct: float):
+        """_summary_
+        Args:
+            client_id (int): client id
+            weight_vec (np.ndarray): model weights
+            cct (float): Client computing time
+           
+        """
+
+        # Fast client categorization
+        # SF: Fast client 2*cct <= ert
+        # FE: Fast enough client 3*cct <= 2*ert
+        # NF: Negligible fast client is the rest
+
+        fast_client_categorization = 'NF'
+        fc_categories = {
+            'NF': 1,
+            'SF': 2,
+            'FE': 3
+        }
+
+        if 2*cct <= self.ert:
+            logging.info(f'[Semi] Fast client {client_id} with 2*cct = {2*cct} <= {self.ert=}')
+            fast_client_categorization = 'SF'
+        elif 3*cct <= 2*self.ert:
+            logging.info(f'[Semi] Fast enough client {client_id} with 3*cct = {3*cct} <= 2*{self.ert=}')
+            fast_client_categorization = 'FE'
+        else:
+            logging.info(f'[Semi] Negligible fast client {client_id} with 3*cct = {3*cct} > 2*{self.ert=}')
+            fast_client_categorization = 'NF'
+
+        gt_data = {
+            'client_id': client_id,
+            'cct': cct,
+            'ert': self.ert,
+            'categorization': fc_categories[fast_client_categorization],
+        }
+
+        report_data(self.wandb_obj, gt_data)
         # Get bucket for client
         bucket = self.buckets.get_bucket(self.age, self.get_model_dict_vector())
         current_bucket_model = bucket.get_next_model()
         # logging.info(f'[Semi] Fast client {client_id} get current model {current_bucket_model=}')
-        alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, current_bucket_model, self.learning_rate)
+        self.personalized_update(client_id, weight_vec, current_bucket_model)
+        self.fast_clients.append(client_id)
+
+    def personalized_update(self, client_id: int, weight_vec: np.ndarray, current_server_model: np.ndarray):
+        alpha_averaged: np.ndarray = fed_async_avg_np(weight_vec, current_server_model, self.learning_rate)
         # logging.info(f'[Semi] Fast client {client_id} get alpha-averaged model {alpha_averaged=}')
         self.sched_ctx.send_model_to_client(client_id, alpha_averaged, self.age)
         self.sched_ctx.move_client_to_compute_mode(client_id, partial=True)
-        # logging.info(f'Client {client_id} will be a FAST client')
-        self.fast_clients.append(client_id)
-
-    def personalized_update(self):
-        pass
 
     def compute_delayed_aggregation(self, from_k: int, to_k: int) -> List[Tuple[int, int, np.ndarray]]:
         W_i = [] # Store delayed aggregate and number of used weights
@@ -164,13 +212,16 @@ class SemiAsync(Server):
 
 
     def client_weight_dict_vec_update(self, client_id: int, weight_vec: np.ndarray, gradient_age: int, is_byzantine: bool) -> Tuple[Union[np.ndarray, None], bool]:
+        assert self.aggregation_bound != None
         has_aggregated = False
         prefix = ''
         if client_id in self.fast_clients:
             prefix = ' FS'
-        # logging.debug(f'[Semi{prefix}] processing client {client_id} ({gradient_age}|{self.age}) :: (B ? {is_byzantine})')
-        # logging.info(f'[PessServer] processing client {client_id} with time_delta {self.sched_ctx.current_client_time=}')
-        assert self.aggregation_bound != None
+        
+        # Calculate the client computing time
+        cct = self.sched_ctx.wall_time - self.client_start_timestamps[client_id]
+        self.client_start_timestamps[client_id] = self.sched_ctx.wall_time
+        logging.info(f'{prefix} [Semi] Client {client_id} has been computing for {cct} seconds')
 
         # Check what client we are dealing with
         # If client from the current round?
@@ -180,40 +231,24 @@ class SemiAsync(Server):
             # pending[a] = pending[a] U client weights
             self.pending[self.age][client_id] = (weight_vec, is_byzantine)
 
-            # logging.debug(f'Weights for {client_id} are ==> {self.pending[self.age][client_id]}')
-
             # Check if we have enough updates to aggregate
             if len(self.pending[self.age]) >= self.aggregation_bound:
-                logging.info('[Semi] Aggregate?')
+
+                # Get current wall time
+                current_wall_time = self.sched_ctx.wall_time
+                self.ert = current_wall_time - self.lat
+                self.lat = current_wall_time
+                logging.info(f'[Semi] Aggregate at all times: {current_wall_time=} {self.ert=}')
+
+                # logging.info('[Semi] Aggregate?')
                 from_k = max(self.age - self.k + 1, 0)
                 to_k = max(self.age, 0) # Change to make it work with range
-                # W_i = [] # Store delayed aggregate and number of used weights
-
+                
                 # Recal fast clients?
                 self.process_partial_epochs()
-
-                    # Remove cc from fast clients
-                    
-
-                    # Put data in bucket 
-
-                    # Move client to computing
-                # logging.debug([(x[1].pid, x[3]) for x in self.sched_ctx.clients_adm['computing'] if x[1].pid in list(set(self.fast_clients))])
-
-                # Loop over older delayed updates
-                    
-
-                # Collect aggregation stats:
-                stat_cw = 0 #client weights
-                stat_fw = 0 # filtered weights
-                # client_weights = []
-
                 # Include older updates
                 # Use the window [from_k, to_k-1] to look back for pending old updates
                 W_i = self.compute_delayed_aggregation(from_k, to_k)
-                
-                # Include current updates
-                # logging.info(f'[Semi] i= {[x[0] for x in self.pending[self.age].values()]=}')  
 
                 # Log the client_ids that are used in self.pending[self.age]
                 used_client_ids = list(self.pending[self.age].keys())
@@ -257,6 +292,7 @@ class SemiAsync(Server):
                     'num_pending': len(self.pending[self.age]),
                     'n_computing': len(self.sched_ctx.clients_adm['computing']),
                     'n_idle': len(self.sched_ctx.clients_adm['idle']),
+                    'ert': self.ert
 
 
                 }
@@ -318,7 +354,7 @@ class SemiAsync(Server):
             else:
                 # This is a fast client
 
-                self.handle_fast_clients(client_id, weight_vec)
+                self.handle_fast_clients(client_id, weight_vec, cct)
                 return None, has_aggregated
 
                 # # Add to idle clients

@@ -131,7 +131,8 @@ if __name__ == "__main__":
             # ],
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr, 'reporting': reporting}, "semi-async"],
-            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
+            [AFL.SemiAsyncImproved, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
+            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
             # [AFL.FlameNaiveBaseline,
             #     {
             #         "learning_rate": server_lr, 
