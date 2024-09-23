@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     print("Exp 60 - Correct scheduler")
 
-    exp_name = "exp60_correct_scheduler"
+    exp_name = "exp60_correct_scheduler_improved"
 
     (data_path := Path(".data")).mkdir(exist_ok=True, parents=True)
     (graphs_path := Path("graphs") / exp_name).mkdir(exist_ok=True, parents=True)
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         # Define configuration
         # Single threaded is suggested when running with 100 clients
         multi_thread = True
-        pool_size = 1
+        pool_size = 3
         configs = []
         dist_check = False
         dist_check_exit = False
@@ -72,7 +72,7 @@ if __name__ == "__main__":
         # num_byz_nodes = [0]
         num_rounds = 70
         idx = 1  # Most likely should not be changed in most cases
-        repetitions = 1
+        repetitions = 3
         exp_id = 0
         # server_lr = 0.005
         server_lr = 1
@@ -85,6 +85,7 @@ if __name__ == "__main__":
         # Sampling labels limit
         limit = 5
         var_sets = [
+            {"num_clients": 40, "num_byz_nodes": 0, "flame_hist": 3},
             {"num_clients": 40, "num_byz_nodes": 4, "flame_hist": 3},
             {"num_clients": 40, "num_byz_nodes": 8, "flame_hist": 3},
             # {"num_clients": 100, "num_byz_nodes": 30, "flame_hist": 3},
@@ -132,7 +133,7 @@ if __name__ == "__main__":
             # # [AFL.PessimisticServer, {"learning_rate": server_lr, "k": 3, "disable_alpha": True}, 'semi-async'],
             # [AFL.FedAsync, {"learning_rate": server_lr, 'reporting': reporting}, "semi-async"],
             [AFL.SemiAsyncImproved, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
-            # [AFL.SemiAsync, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
+            [AFL.SemiAsync, {"learning_rate": server_lr, "k": 20, "disable_alpha": False, 'reporting': reporting}, 'semi-async'],
             # [AFL.FlameNaiveBaseline,
             #     {
             #         "learning_rate": server_lr, 

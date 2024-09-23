@@ -63,12 +63,23 @@ class SemiAsyncImproved(SemiAsync):
         if 2*cct <= self.ert:
             logging.info(f'[IMPROVED] Fast client {client_id} with 2*cct = {2*cct} <= {self.ert=}')
             fast_client_categorization = 'SF'
+            bucket = self.buckets.get_bucket(self.age, self.get_model_dict_vector())
+            current_bucket_model = bucket.get_next_model()
+            self.personalized_update(client_id, weight_vec, current_bucket_model)
+            self.fast_clients.append(client_id)
         elif 3*cct <= 2*self.ert:
             logging.info(f'[IMPROVED] Fast enough client {client_id} with 3*cct = {3*cct} <= 2*{self.ert=}')
             fast_client_categorization = 'FE'
+            bucket = self.buckets.get_bucket(self.age, self.get_model_dict_vector())
+            current_bucket_model = bucket.get_next_model()
+            self.personalized_update(client_id, weight_vec, current_bucket_model)
+            self.fast_clients.append(client_id)
         else:
             logging.info(f'[IMPROVED] Negligible fast client {client_id} with 3*cct = {3*cct} > 2*{self.ert=}')
             fast_client_categorization = 'NF'
+            # Make client idle
+            self.idle_clients.append(client_id)
+            self.sched_ctx.move_client_to_idle_mode(client_id) #type:ignore
 
         gt_data = {
             'client_id': client_id,
@@ -76,5 +87,12 @@ class SemiAsyncImproved(SemiAsync):
             'ert': self.ert,
             'categorization': fc_categories[fast_client_categorization],
         }
+
+        report_data(self.wandb_obj, gt_data)
+        # # Get bucket for client
+        # bucket = self.buckets.get_bucket(self.age, self.get_model_dict_vector())
+        # current_bucket_model = bucket.get_next_model()
+        # self.personalized_update(client_id, weight_vec, current_bucket_model)
+        # self.fast_clients.append(client_id)
          
     
