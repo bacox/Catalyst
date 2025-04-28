@@ -35,6 +35,8 @@ Catalyst simulates asynchronous federated learning where:
 
 Author: **Bart Cox** — *13-02-2023*
 
+Email: **b.a.cox@tudelft.nl**
+
 ---
 
 ## ⚙️ Development Notes
