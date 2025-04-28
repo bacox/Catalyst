@@ -1,4 +1,4 @@
-# Telerig
+# Catalyst
 
 [![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org/downloads/release/python-380/)
 [![PyPi license](https://badgen.net/pypi/license/pip/)](https://pypi.org/project/pip/)
@@ -37,7 +37,7 @@ You just create a new model out of client weights.
 | AFL    | Yes    |
 | BASGD  | Yes    |
 | Kardam | Yes    |
-|Telerig | Yes    |
+|Catalyst | Yes    |
 
 ### Build (not required)
 
