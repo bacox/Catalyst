@@ -8,15 +8,18 @@ It supports multiple algorithms and is designed for easy extensibility and repro
 
 ---
 
-## 📦 Cloning the Repository
+## 📁 Submodules
 
-Make sure to clone the repository **with submodules**:
+The `data-processing` submodule is **optional** and only needed for dataset preparation. 
+It is **not required** to run asynchronous training simulations.
+
+### Clone with Submodules
 
 ```bash
-git clone --recursive git://<repo-url>.git
+git clone --recursive git:/<repo-url>.git
 ```
 
-If you've already cloned it without submodules, initialize and update them using:
+To update and initialize submodules:
 
 ```bash
 git submodule update --init --recursive
@@ -39,41 +42,28 @@ Email: **b.a.cox@tudelft.nl**
 
 ---
 
-## ⚙️ Development Notes
+## ⚙️ Asynchronous Federated Learning
 
-### Gradients vs Weights
+This framework simulates a federated system where each client operates asynchronously. Clients vary in compute speed according to distributions (e.g., Normal, Exponential, Uniform). 
 
-- **Gradients** are typically used for single-batch updates and need to be **accumulated** over multiple batches.
-- **Model weights** are simpler to use, as they abstract away the number of local batches:  
-  You can directly use the final trained model weights from each client.
+The goal is to compute the global average across all client updates while handling stragglers and asynchronous behavior robustly. The simulator can be extended for GPU execution and more complex FL scenarios.
 
 ---
 
-## 🧪 Implemented Methods
+## ✅ Implemented Algorithms
 
-| Method   | Status |
-| -------- | :----: |
-| AFL      | ✅ Yes |
-| BASGD    | ✅ Yes |
-| Kardam   | ✅ Yes |
-| Catalyst | ✅ Yes |
-
----
-
-## 🛠️ Build (Optional)
-
-If you want to build the package manually:
-
-```bash
-python3 -m pip install --upgrade build
-python3 -m build
-```
+| Algorithm | Supported |
+|----------|:---------:|
+| AFL      |    ✅     |
+| BASGD    |    ✅     |
+| Kardam   |    ✅     |
+| Catalyst |    ✅     |
 
 ---
 
-## 📥 Installation
+## 🧪 Getting Started
 
-Set up a virtual environment and install the project:
+### 📦 Installation
 
 ```bash
 python3 -m venv venv
