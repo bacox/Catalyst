@@ -36,7 +36,7 @@ if __name__ == '__main__':
         configs = []
         model_name = 'mnist-cnn'
         dataset = 'mnist'
-        num_byz_nodes = [1]
+        num_byz_nodes = [2]
         # num_byz_nodes = [0]
         num_rounds = 100
         idx = 1
@@ -45,17 +45,17 @@ if __name__ == '__main__':
         server_lr = 0.05
         num_clients = 10
         attacks = [
-            # [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
-            [AFL.RDCLient, {'a_atk':0.2, 'sampler': 'uniform', 'sampler_args': {}}],
+            [AFL.NGClient, {'magnitude': 10,'sampler': 'uniform','sampler_args': {}}],
+            # [AFL.RDCLient, {'a_atk':0.05, 'sampler': 'uniform', 'sampler_args': {}}],
         ]
         
         servers = [
             [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.05}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
-            [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.0}],
-            [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 0.5}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.0}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 1.5}],
+            # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.3, 'eps': 2.0}],
+            # [AFL.Kardam,{'learning_rate': server_lr, 'damp_alpha': 0.01,}],
 
             # [AFL.Telerig,{'learning_rate': server_lr, 'damp_alpha': 0.5,}],
         ]
@@ -88,12 +88,8 @@ if __name__ == '__main__':
                     'client_ct': [1] * (num_clients - f),
                     'n': num_clients,
                     'f': f,
-                    'f_type': AFL.RDCLient,
-                    'f_args': {'a_atk':0.2,
-                    'sampler': 'uniform',
-                            'sampler_args': {
-                            }
-                    },
+                    'f_type': atk[0],
+                    'f_args': atk[1],
                     'f_ct': [1] * f
                 },
                 'server': server[0],

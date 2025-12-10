@@ -3,14 +3,18 @@ cifar-100-python
 .vscode
 *local.md
 .idea
+.debug
 venv_install
-
+nohup.out
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 data.json
 graph.png
+graphs/*
+wandb
+tmp/*
 
 # C extensions
 *.so

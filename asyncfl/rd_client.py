@@ -1,8 +1,9 @@
+import numpy as np
 import torch
 
 from asyncfl import Client
-from asyncfl.network import flatten_b, model_gradients
-
+from asyncfl.network import flatten, flatten_b, model_gradients, unflatten
+import logging
 
 class RDCLient(Client):
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, a_atk=0.2):
@@ -10,6 +11,15 @@ class RDCLient(Client):
         self.a_atk = a_atk
         self.is_byzantine = True
 
+
+    def train(self, num_batches=-1):
+        logging.info(f'[Client {self.pid}] Running RD_Client training loop, a_atk={self.a_atk}')
+        super().train(num_batches)
+        weight_vector = flatten(self.network)
+        g = self.g_flat
+        inter = torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2)))
+        inversed_weights = weight_vector * inter
+        unflatten(self.network, inversed_weights)
 
     def get_gradients(self):
         # @TODO: Fix this, make it compatible with the super call!
@@ -20,21 +30,26 @@ class RDCLient(Client):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
         g = self.g_flat.cpu()
         return [torch.add(g, torch.randn_like(g).mul_(self.a_atk * torch.norm(g, 2))).numpy(), flatten_b(self.network), self.lipschitz, self.convergance, self.local_age, self.is_byzantine]
+    
+    def get_model_dict_vector(self) -> np.ndarray:
+        weight_vec = super().get_model_dict_vector_t()
+        return torch.add(weight_vec, torch.randn_like(weight_vec).mul_(self.a_atk * torch.norm(weight_vec, 2))).cpu().numpy()
+        # return super().get_model_dict_vector_t()
 
-class NGClient(Client):
-    def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, magnitude=10):
-    # def __init__(self, pid, num_clients, dataset_name: str, model_name: str, magnitude=10):
-        super().__init__(pid, num_clients, dataset, model_name, sampler, sampler_args, learning_rate)
-        self.magnitude = magnitude
+# class NGClient(Client):
+#     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005, magnitude=10):
+#     # def __init__(self, pid, num_clients, dataset_name: str, model_name: str, magnitude=10):
+#         super().__init__(pid, num_clients, dataset, model_name, sampler, sampler_args, learning_rate)
+#         self.magnitude = magnitude
 
 
-    def get_gradients(self):
-        # gradients =  model_gradients(self.network)
-        gradients, age = super().get_gradients()
-        return [gradients * -1.0 * self.magnitude, age]
-        # return self.g_flat.data.cpu().numpy()
-        # return [x * -1 * self.magnitude for x in model_gradients(self.network)]
+#     def get_gradients(self):
+#         # gradients =  model_gradients(self.network)
+#         gradients, age = super().get_gradients()
+#         return [gradients * -1.0 * self.magnitude, age]
+#         # return self.g_flat.data.cpu().numpy()
+#         # return [x * -1 * self.magnitude for x in model_gradients(self.network)]
 
-    def get_gradient_vectors(self):
-        # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
-        return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz , self.local_age]
+#     def get_gradient_vectors(self):
+#         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
+#         return [self.g_flat.cpu().numpy() * -1.0 * self.magnitude, flatten_b(self.network), self.lipschitz , self.local_age]

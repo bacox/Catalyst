@@ -1,0 +1,3 @@
+[submodule "data-processing"]
+	path = data-processing
+	url = git@gitlab.ewi.tudelft.nl:bartcox/catalyst-research-data.git

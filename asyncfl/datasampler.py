@@ -1,3 +1,4 @@
+import logging
 import random
 from torch.utils.data import DistributedSampler, Dataset
 from typing import Iterator
@@ -93,9 +94,12 @@ class N_Labels(DistributedSamplerWrapper):
     """
     A sampler that limits the number of labels per client
     The number of clients must <= than number of labels
+
+    use_client_order = True: The labels are distributed in a way that each client gets a set of labels in order
+    use_client_order = False: The labels are distributed in a way that each client gets a set of labels in random order
     """
 
-    def __init__(self, dataset, num_replicas, rank, seed, limit=10):
+    def __init__(self, dataset, num_replicas, rank, seed, limit=10, use_client_order=True):
         super().__init__(dataset, num_replicas, rank, seed)
 
         num_copies = np.ceil((limit * self.n_clients) / self.n_labels)
@@ -105,12 +109,37 @@ class N_Labels(DistributedSamplerWrapper):
         clients = list(range(self.n_clients))  # keeps track of which clients should still be given a label
         client_label_dict = {}
         ordered_list = list(range(self.n_labels)) * int(num_copies)
-        # Now code
-        for idx, client_id in enumerate(clients):
-            label_set = []
-            for _ in range(limit):
-                label_set.append(ordered_list.pop())
-            client_label_dict[client_id] = label_set
+
+        # if False:
+        #     # New code
+        #     # print(f'{ordered_list=}')
+        #     # TODO: Change the code here to create difficult scenario
+        #     for idx, client_id in enumerate(clients):
+        #         label_set = []
+        #         for _ in range(limit):
+        #             label_set.append(ordered_list.pop())
+        #         client_label_dict[client_id] = label_set
+        # else:
+        if use_client_order:
+            ordered_list = sorted(ordered_list)
+            # print(f'{ordered_list=}')
+            # create a dictionary of clients and their labels with empty lists as values
+            client_label_dict = {i: [] for i in range(self.n_clients)}
+
+            while len(ordered_list) > 0:
+                for client_id in range(self.n_clients):
+                    if len(ordered_list) == 0:
+                        break
+                    client_label_dict[client_id].append(ordered_list.pop())
+        else:
+            # New code
+            # print(f'{ordered_list=}')
+            # TODO: Change the code here to create difficult scenario
+            for idx, client_id in enumerate(clients):
+                label_set = []
+                for _ in range(limit):
+                    label_set.append(ordered_list.pop())
+                client_label_dict[client_id] = label_set
 
         client_label_dict['rest'] = []
         # New code
@@ -129,6 +158,7 @@ class N_Labels(DistributedSamplerWrapper):
         indices_per_client = {}
         for c in clients:
             indices_per_client[c] = []
+        # print(f'{reverse_label_dict=}')
 
         rest_indices = []
         for group, label_list in enumerate(ordered_by_label):
@@ -154,6 +184,181 @@ class N_Labels(DistributedSamplerWrapper):
                 indices_per_client[k] = np.concatenate(v)
 
         indices = indices_per_client[self.client_id]
+        random.seed(seed + self.client_id)  # give each client a unique shuffle
+        random.shuffle(indices)  # shuffle indices to spread the labels
+
+        self.indices = indices
+
+class DirichletSampler(DistributedSamplerWrapper):
+    """ Generates a (non-iid) data distribution by sampling the dirichlet distribution. Dirichlet constructs a
+    vector of length num_clients, that sums to one. Decreasing alpha results in a more non-iid data set.
+    This distribution method results in both label and quantity skew.
+    """
+    def __init__(self, dataset: Dataset, num_replicas = None,
+                 rank = None, args = (0.5, 42)) -> None:
+        alpha, seed = args
+        super().__init__(dataset, num_replicas=num_replicas, rank=rank, seed=seed)
+
+        np.random.seed(seed)
+        indices = []
+        ordered_by_label = self.order_by_label(dataset)
+        for labels in ordered_by_label:
+            n_samples = len(labels)
+            # generate an allocation by sampling dirichlet, which results in how many samples each client gets
+            allocation = np.random.dirichlet([alpha] * self.n_clients) * n_samples
+            allocation = allocation.astype(int)
+            start_index = allocation[0:self.client_id].sum()
+            end_index = 0
+            if self.client_id + 1 == self.n_clients:  # last client
+                end_index = n_samples
+            else:
+                end_index = start_index + allocation[self.client_id]
+
+            selection = labels[start_index:end_index]
+            indices.extend(selection)
+
+        labels = [dataset.targets[i] for i in indices]
+        # logging.info("nr of samplers in client with rank {}: {}".format(rank, len(indices)))
+        # logging.info("distribution in client with rank {}: {}".format(rank, Counter(labels)))
+
+        random.seed(seed + self.client_id)  # give each client a unique shuffle
+        random.shuffle(indices)  # shuffle indices to spread the labels
+
+        self.indices = indices
+
+class LimitLabelsSamplerFlex(DistributedSamplerWrapper):
+    """
+    A sampler that limits the number of labels per client
+    The number of clients must <= than number of labels
+    """
+
+    def __init__(self, dataset, num_replicas, rank, args=(5, 42)):
+        limit, seed = args
+        super().__init__(dataset, num_replicas, rank, seed)
+
+        labels_per_client = int(np.floor(self.n_labels / self.n_clients))
+        remaining_labels = self.n_labels - labels_per_client
+        labels = list(range(self.n_labels))  # list of labels to distribute
+        clients = list(range(self.n_clients))  # keeps track of which clients should still be given a label
+        client_labels = [set() for n in range(self.n_clients)]  # set of labels given to each client
+        random.seed(seed)  # seed, such that the same result can be obtained multiple times
+        # print(client_labels)
+
+        label_order = random.sample(labels, len(labels))
+        client_label_dict = {}
+        for client_id in clients:
+            client_label_dict[client_id] = []
+            for _ in range(labels_per_client):
+                chosen_label = label_order.pop()
+                client_label_dict[client_id].append(chosen_label)
+                client_labels[client_id].add(chosen_label)
+        client_label_dict['rest'] = label_order
+
+        indices = []
+        ordered_by_label = self.order_by_label(dataset)
+        labels = client_label_dict[self.client_id]
+        for label in labels:
+            n_samples = int(len(ordered_by_label[label]))
+            clients = [c for c, s in enumerate(client_labels) if label in s]  # find out which clients have this label
+            index = clients.index(self.client_id)  # find the position of this client
+            start_index = index * n_samples  # inclusive
+            if rank == self.n_clients:
+                end_index = len(ordered_by_label[label])  # exclusive
+            else:
+                end_index = start_index + n_samples  # exclusive
+
+            indices += ordered_by_label[label][start_index:end_index]
+
+        # Last part is uniform sampler
+        rest_indices = []
+        for l in client_label_dict['rest']:
+            rest_indices += ordered_by_label[l]
+        filtered_rest_indices = rest_indices[self.rank:self.total_size:self.num_replicas]
+        indices += filtered_rest_indices
+        random.seed(seed + self.client_id)  # give each client a unique shuffle
+        random.shuffle(indices)  # shuffle indices to spread the labels
+
+        self.indices = indices
+class LimitLabelsSampler(DistributedSamplerWrapper):
+    """
+    A sampler that limits the number of labels per client
+    """
+
+    def __init__(self, dataset, num_replicas, rank, args=(5, 42)):
+        limit, seed = args
+        super().__init__(dataset, num_replicas, rank, seed)
+
+        if self.n_clients % self.n_labels != 0:
+            logging.error(
+                "multiples of {} clients are needed for the 'limiting-labels' data distribution method, {} does not work".format(
+                    self.n_labels, self.n_clients))
+            return
+
+        n_occurrences = limit * int(self.n_clients / self.n_labels)  # number of occurrences of each label
+        counters = [n_occurrences] * self.n_clients  # keeps track of which labels still can be given out
+        labels = list(range(self.n_labels))  # list of labels to distribute
+        clients = list(range(self.n_clients))  # keeps track of which clients should still be given a label
+        client_labels = [set() for n in range(self.n_clients)]  # set of labels given to each client
+        random.seed(seed)  # seed, such that the same result can be obtained multiple times
+
+        while labels:
+            # pick a random label
+            label = random.choice(labels)
+            counters[label] -= 1  # decrement counter of this label
+            if counters[label] == 0:  # if needed, remove label
+                labels.remove(label)
+
+            # check which clients the label can be given to
+            selectable = [i for i in clients if not label in client_labels[i]]
+            client = None
+
+            if not selectable:
+                # poor choice, let's fix this -> swap two labels
+                # conditions for swapping:
+                #   sets of labels A, B, with B incomplete, remaining label l that is not possible to give to B, s.t.:
+                #       (1) l not in A
+                #       (2) exists label l' in A but not in B
+                #   l, l' can be swapped
+
+                client = random.choice(clients)  # label can not be given to this client
+                for c, s in enumerate(client_labels):
+                    if len(s) == limit:  # this a completed set
+                        if label not in s:  # label can be given to this client (1)
+                            subset = s.difference(client_labels[client])  # remove labels client already has (2...)
+                            if subset:  # subset is not empty (2 continued):
+                                l = min(subset)  # get a swappable label (in a deterministic way), and swap labels
+                                client_labels[c].remove(l)
+                                client_labels[c].add(label)
+                                client_labels[client].add(l)
+                                break
+            else:  # normal operation, pick a rondom selectable client
+                client = random.choice(selectable)
+                client_labels[client].add(label)
+
+            # check if this client has been given the maximum number of labels
+            if len(client_labels[client]) == limit:
+                clients.remove(client)
+
+        # now we have a set of labels for each client
+        # client with rank=rank now needs to be given data
+        # all clients get the same amount of data, the first portion is given to client with rank 1, the second to rank 2, etc
+
+        labels = client_labels[self.client_id]
+        # logging.info("Client {} gets labels {}".format(self.rank, client_labels[self.client_id]))
+        indices = []
+        ordered_by_label = self.order_by_label(dataset)
+        for label in labels:
+            n_samples = int(len(ordered_by_label[label]) / n_occurrences)
+            clients = [c for c, s in enumerate(client_labels) if label in s]  # find out which clients have this label
+            index = clients.index(self.client_id)  # find the position of this client
+            start_index = index * n_samples  # inclusive
+            if rank == self.n_clients:
+                end_index = len(ordered_by_label[label])  # exclusive
+            else:
+                end_index = start_index + n_samples  # exclusive
+
+            indices += ordered_by_label[label][start_index:end_index]
+
         random.seed(seed + self.client_id)  # give each client a unique shuffle
         random.shuffle(indices)  # shuffle indices to spread the labels
 

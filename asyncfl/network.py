@@ -1,4 +1,5 @@
-from typing import List, Any
+from collections import OrderedDict
+from typing import Any, List
 
 import numpy as np
 import torch
@@ -14,6 +15,8 @@ def get_model_by_name(name: str):
         return LeNet(output_dim=10)
     elif name == 'cifar10-resnet9':
         return ResNet9(3, 10)
+    elif name == 'cifar10-resnet18':
+        return resnet18(num_classes=10)
     elif name == 'cifar100-lenet':
         return LeNet(output_dim=100)
     elif name == 'cifar100-resnet':
@@ -22,6 +25,8 @@ def get_model_by_name(name: str):
         return vgg11_bn()
     elif name == 'cifar100-resnet9':
         return ResNet9(3, 100)
+    elif name == 'wikitext2-lstm':
+        return TextLSTM(vocab_size=23654, embed_size=100, hidden_size=256, n_layers=2)
     else:
         raise ValueError(f'Unknown model name "{name}"!')
 
@@ -45,6 +50,21 @@ def flatten(model):
         vec.append(param.data.view(-1))
     return torch.cat(vec)
 
+def flatten_dict(model: torch.nn.Module) -> torch.Tensor:
+    vec = []
+    for param in model.state_dict().copy().values():
+        vec.append(param.data.view(-1))
+    return torch.cat(vec)
+
+def unflatten_dict(model: torch.nn.Module, vec: torch.Tensor):
+    pointer = 0
+    state_dict = {}
+    for key, param in model.state_dict().items():
+        num_param = torch.prod(torch.LongTensor(list(param.size())))
+        param.data = vec[pointer:pointer + num_param].view(param.size())
+        pointer += num_param
+        state_dict[key] = param
+    model.load_state_dict(state_dict)
 
 def unflatten(model, vec):
     pointer = 0
@@ -173,6 +193,7 @@ class MNIST_CNN(nn.Module):
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class BasicBlock(nn.Module):
     """Basic Block for resnet 18 and resnet 34
     """
@@ -187,13 +208,14 @@ class BasicBlock(nn.Module):
         super().__init__()
 
         #residual function
-        self.residual_function = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels * BasicBlock.expansion, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels * BasicBlock.expansion)
-        )
+
+        self.residual_function = nn.Sequential(OrderedDict([
+            ('Conv', nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv2', nn.Conv2d(out_channels, out_channels * BasicBlock.expansion, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels * BasicBlock.expansion))
+        ]))
 
         #shortcut
         self.shortcut = nn.Sequential()
@@ -201,10 +223,10 @@ class BasicBlock(nn.Module):
         #the shortcut output dimension is not the same with residual function
         #use 1*1 convolution to match the dimension
         if stride != 1 or in_channels != BasicBlock.expansion * out_channels:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels * BasicBlock.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.BatchNorm2d(out_channels * BasicBlock.expansion)
-            )
+            self.shortcut = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels, out_channels * BasicBlock.expansion, kernel_size=1, stride=stride, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels * BasicBlock.expansion))
+            ]))
 
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
@@ -215,24 +237,24 @@ class BottleNeck(nn.Module):
     expansion = 4
     def __init__(self, in_channels, out_channels, stride=1):
         super().__init__()
-        self.residual_function = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels * BottleNeck.expansion, kernel_size=1, bias=False),
-            nn.BatchNorm2d(out_channels * BottleNeck.expansion),
-        )
+        self.residual_function = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv2', nn.Conv2d(out_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('conv3', nn.Conv2d(out_channels, out_channels * BottleNeck.expansion, kernel_size=1, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels * BottleNeck.expansion)),
+        ]))
 
         self.shortcut = nn.Sequential()
 
         if stride != 1 or in_channels != out_channels * BottleNeck.expansion:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels * BottleNeck.expansion, stride=stride, kernel_size=1, bias=False),
-                nn.BatchNorm2d(out_channels * BottleNeck.expansion)
-            )
+            self.shortcut = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels, out_channels * BottleNeck.expansion, stride=stride, kernel_size=1, bias=False)),
+                ('bn', nn.BatchNorm2d(out_channels * BottleNeck.expansion))
+            ]))
 
     def forward(self, x):
         return nn.ReLU(inplace=True)(self.residual_function(x) + self.shortcut(x))
@@ -245,10 +267,11 @@ class Cifar100ResNet(nn.Module):
         self.in_channels = 64
         self.criterion = torch.nn.CrossEntropyLoss()
 
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True))
+        self.conv1 = nn.Sequential(OrderedDict([
+            ('conv1', nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False)),
+            ('bn', nn.BatchNorm2d(64)),
+            ('relua', nn.ReLU(inplace=True))
+            ]))
         #we use a different inputsize than the original paper
         #so conv2_x's stride is 1
         self.conv2_x = self._make_layer(block, 64, num_block[0], 1)
@@ -293,10 +316,10 @@ class Cifar100ResNet(nn.Module):
 
         return output
 
-def resnet18():
+def resnet18(num_classes=100):
     """ return a ResNet 18 object
     """
-    return Cifar100ResNet(BasicBlock, [2, 2, 2, 2])
+    return Cifar100ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
 def resnet34():
     """ return a ResNet 34 object
@@ -387,8 +410,8 @@ def vgg19_bn():
     return Cifar100VGG(make_layers(cfg['E'], batch_norm=True))
 
 def conv_block(in_channels, out_channels, pool=False):
-    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1), 
-              nn.BatchNorm2d(out_channels), 
+    layers = [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+              nn.BatchNorm2d(out_channels),
               nn.ReLU(inplace=True)]
     if pool: layers.append(nn.MaxPool2d(2))
     return nn.Sequential(*layers)
@@ -398,19 +421,19 @@ class ResNet9(nn.Module):
         super().__init__()
         self.criterion = torch.nn.CrossEntropyLoss()
         self.conv1 = conv_block(in_channels, 64)
-        self.conv2 = conv_block(64, 128, pool=True) 
-        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128)) 
-        
+        self.conv2 = conv_block(64, 128, pool=True)
+        self.res1 = nn.Sequential(conv_block(128, 128), conv_block(128, 128))
+
         self.conv3 = conv_block(128, 256, pool=True)
-        self.conv4 = conv_block(256, 512, pool=True) 
-        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512)) 
-        self.conv5 = conv_block(512, 1028, pool=True) 
-        self.res3 = nn.Sequential(conv_block(1028, 1028), conv_block(1028, 1028))  
-        
+        self.conv4 = conv_block(256, 512, pool=True)
+        self.res2 = nn.Sequential(conv_block(512, 512), conv_block(512, 512))
+        self.conv5 = conv_block(512, 1028, pool=True)
+        self.res3 = nn.Sequential(conv_block(1028, 1028), conv_block(1028, 1028))
+
         self.classifier = nn.Sequential(nn.MaxPool2d(2), # 1028 x 1 x 1
-                                        nn.Flatten(), # 1028 
+                                        nn.Flatten(), # 1028
                                         nn.Linear(1028, num_classes)) # 1028 -> 100
-        
+
     def forward(self, xb):
         out = self.conv1(xb)
         out = self.conv2(out)
@@ -422,3 +445,31 @@ class ResNet9(nn.Module):
         out = self.res3(out) + out
         out = self.classifier(out)
         return out
+
+class TextLSTM(nn.Module):
+    def __init__(self, vocab_size, embed_size, hidden_size, n_layers):
+        super(TextLSTM, self).__init__()
+        self.criterion = torch.nn.functional.cross_entropy
+        self.num_layers = n_layers
+        self.hidden_dim = hidden_size
+        self.embedding_dim = embed_size
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers=n_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, vocab_size)
+
+    def forward(self, x, hidden):
+        embedded = self.embedding(x)
+        output, hidden = self.lstm(embedded, hidden)
+        output = self.fc(output)
+        return output, hidden
+
+    def init_hidden(self, batch_size, device):
+        hidden = torch.zeros(self.num_layers, batch_size, self.hidden_dim).to(device)
+        cell = torch.zeros(self.num_layers, batch_size, self.hidden_dim).to(device)
+        return hidden, cell
+
+    def detach_hidden(self, hidden):
+        hidden, cell = hidden
+        hidden = hidden.detach()
+        cell = cell.detach()
+        return hidden, cell

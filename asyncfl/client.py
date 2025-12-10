@@ -1,12 +1,19 @@
 import copy
-from typing import List
-
-import torch
-import numpy as np
 import logging
+from typing import List, cast
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+import wandb
+
 from asyncfl.util import compute_convergance, compute_lipschitz_simple
+
 from .dataloader import afl_dataloader, afl_dataset
-from .network import MNIST_CNN, flatten_b, get_model_by_name, model_gradients, flatten, flatten_g, unflatten
+from .network import (MNIST_CNN, TextLSTM, flatten, flatten_b, flatten_dict,
+                      flatten_g, get_model_by_name, model_gradients, unflatten,
+                      unflatten_dict)
+
 
 def polyak_update(polyak_factor, target_network, network):
     for target_param, param in zip(target_network.parameters(), network.parameters()):
@@ -16,7 +23,6 @@ class Client:
     def __init__(self, pid, num_clients, dataset, model_name: str, sampler, sampler_args={}, learning_rate = 0.005) -> None:
 
         self.pid = pid
-        self.train_set = afl_dataloader(dataset, use_iter=False, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         # self.train_set = afl_dataset(dataset_name, use_iter=True, client_id=pid, n_clients=num_clients, sampler=sampler, sampler_args=sampler_args)
         # self.device = torch.device('cpu')
         self.device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -30,10 +36,21 @@ class Client:
         self.w_flat = flatten(self.network)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.local_age = 0
+        self.dataset_name = ''
         # self.lipschitz = None
         self.lipschitz = 0
         self.convergance = 0
         self.is_byzantine = False
+        self.is_lstm = isinstance(self.network, TextLSTM)
+
+        dataset_client_id = pid
+        if dataset_client_id >= num_clients:
+            # Use modulo to get the client id
+            dataset_client_id = dataset_client_id % num_clients
+            
+        self.train_set = afl_dataloader(
+            dataset, use_iter=False, client_id=dataset_client_id, n_clients=num_clients, sampler=sampler,
+            sampler_args=sampler_args, drop_last=self.is_lstm)
 
         self.prev_weights =  torch.zeros_like(self.w_flat)
         self.prev_gradients = torch.zeros_like(self.w_flat)
@@ -51,22 +68,34 @@ class Client:
 
     def get_weights(self):
         return self.network.state_dict().copy()
-    
+
 
     def get_weight_vectors(self):
         # Make flat vector of paramters
         # Make flat vector of buffers
         return [flatten(self.network), flatten_b(self.network)]
-    
+
     def get_gradient_vectors(self):
         # return [self.g_flat.cpu().numpy(), flatten_b(self.network).cpu().numpy(), self.local_age]
         return [self.g_flat.cpu().numpy(), flatten_b(self.network), self.lipschitz, self.convergance , self.local_age, self.is_byzantine]
-    
+
 
     def set_weight_vectors(self, weights: np.ndarray, age):
         self.local_age = age
         unflatten(self.network, torch.from_numpy(weights).to(self.device))
-    
+
+
+    def get_model_dict_vector(self) -> np.ndarray:
+        return flatten_dict(self.network).cpu().numpy()
+
+    def get_model_dict_vector_t(self) ->torch.Tensor:
+        return flatten_dict(self.network)
+
+    def load_model_dict_vector(self, vec: np.ndarray):
+        vec = torch.from_numpy(vec).to(self.device)
+        unflatten_dict(self.network, vec)
+
+
 
     # GPU AUX FUNCTIONS
     def move_to_gpu(self):
@@ -104,10 +133,12 @@ class Client:
     #     # self.optimizer.zero_grad()
 
     #     # print('Finished training')
+    def report_loss_during_training(self, loss):
+        pass
 
-
-    def train(self, num_batches = -1):
+    def train(self, num_batches = -1, local_epochs = 1):
         # @TODO: Increment local_age
+        # logging.debug(f'[Client {self.pid}] training')
         self.w_flat = flatten(self.network)
 
         prev_weights = self.w_flat.detach().clone()
@@ -120,24 +151,43 @@ class Client:
         g_flat_local = torch.zeros_like(self.w_flat)
         self.g_flat = torch.zeros_like(self.w_flat)
         self.optimizer.zero_grad()
-        for batch_idx, (inputs, labels) in enumerate(self.train_set):
-            # print(f'[Client{self.pid}]:: {batch_idx}')
-            inputs, labels = inputs.to(self.device), labels.to(self.device)
-            self.optimizer.zero_grad()
-            outputs = self.network(inputs)
-            loss = self.loss_function(outputs, labels)
-            loss.backward()
-            flatten_g(self.network, g_flat_local)
-            # g_flat_local.g_flat.mul_(self.lr)
-            self.g_flat.add_(g_flat_local)
-            # print(self.g_flat)
-            self.optimizer.step()
-            if batch_idx == num_batches:
-                break
+
+        for ep in range(local_epochs):
+            if self.is_lstm:
+                hidden = cast(TextLSTM, self.network).init_hidden(
+                    self.train_set.batch_size, self.device)
+            else:
+                hidden = None
+            for batch_idx, (inputs, labels) in enumerate(self.train_set):
+                # print(f'[Client{self.pid}]:: {batch_idx}')
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                self.optimizer.zero_grad()
+                if hidden:
+                    hidden = cast(TextLSTM, self.network).detach_hidden(hidden)
+                    outputs, hidden = self.network(inputs, hidden)
+                    outputs = outputs.reshape(inputs.numel(), -1)
+                    labels = labels.reshape(-1)
+                else:
+                    outputs = self.network(inputs)
+                loss = self.network.criterion(outputs, labels)
+                self.report_loss_during_training(loss)
+                loss.backward()
+                # Do this for the Gradient inversion byzantine client?
+                clip = 5
+                torch.nn.utils.clip_grad_norm_(self.network.parameters(),clip)
+                flatten_g(self.network, g_flat_local)
+                # g_flat_local.g_flat.mul_(self.lr)
+                self.g_flat.add_(g_flat_local)
+                # print(self.g_flat)
+                self.optimizer.step()
+                # logging.info(f'[{self.pid}] loss: {loss}')
+                if batch_idx == num_batches:
+                    break
+
             # print(self.g_flat)
         current_weights = flatten(self.network)
 
-        
+
         self.lipschitz = compute_lipschitz_simple(self.g_flat.cpu(), self.prev_gradients.cpu(), current_weights.cpu(), prev_weights.cpu())
         self.convergance = compute_convergance(self.g_flat, self.prev_gradients, self.prev_prev_gradients)
 
@@ -158,6 +208,3 @@ class Client:
     #         self.optimizer.step()
     #         print(outputs)
     #         break
-
-
-
