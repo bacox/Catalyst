@@ -43,8 +43,9 @@ def prepare_dfs(data_file: Path) -> ResultDataFrames:
         metric = "Perplexity" if "lstm" in cfg_data["model_name"] else "Accuracy"
         name_parts = name.split("_")
         alg_name = name_parts[0]
+        print(running_stats[0][0])
 
-        local_server_df = pd.DataFrame(running_stats[0], columns=["Round", metric, "loss"])
+        local_server_df = pd.DataFrame(running_stats[0], columns=["Round", metric, "loss", "backdoor_accuracy"])
         f = cfg_data["clients"]["f"]
         local_server_df["f"] = f
         local_server_df["n"] = cfg_data["clients"]["n"]

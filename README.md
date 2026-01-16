@@ -8,41 +8,56 @@ It supports multiple algorithms and is designed for easy extensibility and repro
 
 ---
 
-## 📁 Submodules
+## Getting Started
+The code is tested on Ubuntu 24.04 with Python 3.8
 
-The `data-processing` submodule is **optional** and only needed for dataset preparation. 
-It is **not required** to run asynchronous training simulations.
+### Installation
 
-### Clone with Submodules
-
+Setup a virtual environment
 ```bash
-git clone --recursive git:/<repo-url>.git
+python38 -m venv venv38
+source venv38/bin/activate
 ```
+
+Install dependencies for GPU or CPU:
+Cuda:
+```bash
+pip install -r requirements_cuda117.txt
+```
+
+CPU:
+```bash
+pip install -r requirements.txt
+```
+
+
+### Submodules
+
+The `data-processing` submodule is *optional* and only needed for dataset preparation. It is *not required* to run asynchronous training simulations.
 
 To update and initialize submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
-
 ---
 
-## 🚀 Project Overview
+## Project Overview
 
 Catalyst simulates asynchronous federated learning where:
 
 - Clients have different compute speeds (Normal, Exponential, or Uniform distributions).
 - Client updates arrive at the server asynchronously.
-- Updates can use either **gradients** or **model weights**.
+- Updates can use either gradients or model weights.
 - Designed to eventually support GPU-based large-scale simulations.
 
-Author: **Bart Cox** — *13-02-2023*
+Author: Bart Cox — *13-02-2023*
 
 Email: **b.a.cox@tudelft.nl**
 
 ---
 
-## ⚙️ Asynchronous Federated Learning
+## Asynchronous Federated Learning
 
 This framework simulates a federated system where each client operates asynchronously. Clients vary in compute speed according to distributions (e.g., Normal, Exponential, Uniform). 
 
@@ -50,7 +65,7 @@ The goal is to compute the global average across all client updates while handli
 
 ---
 
-## ✅ Implemented Algorithms
+## Implemented Algorithms
 
 | Algorithm | Supported |
 |----------|:---------:|
@@ -61,19 +76,7 @@ The goal is to compute the global average across all client updates while handli
 
 ---
 
-## 🧪 Getting Started
-
-### 📦 Installation
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install .
-```
-
----
-
-## 🏃 Running Experiments
+## Running Experiments
 
 To list all available experiments:
 
@@ -104,10 +107,16 @@ To follow live logging output:
 ```bash
 tail -f debug.log
 ```
-
+### Example
+```bash
+python -m asyncfl.exps.exp50_mnist
+python -m asyncfl.proc_exp exp50_mnist -t 750
+# Visualize results
+python -m asyncfl.proc_exp exp50_mnist -w
+```
 ---
 
-## 📊 Reproducibility: Paper Results
+## Reproducibility: Paper Results
 
 Experiment scripts used to generate paper figures and tables:
 
@@ -150,7 +159,7 @@ python -m asyncfl.proc_exp exp54_mnist_scaling_byz -c
 
 ---
 
-## 🧹 Repository Structure
+## Repository Structure
 
 ```
 asyncfl/
@@ -162,12 +171,25 @@ asyncfl/
 
 ---
 
-## 📝 License
+## License
 
 See `LICENSE.txt` for more information.
 
 
-## 🤝 Contributing
+## Contributing
 
 Issues and pull requests are welcome!  
 Feel free to open a discussion if you'd like to collaborate or suggest improvements.
+
+
+## Citation
+
+If you are using Catalyst for your work, please cite our paper with:
+```bibtex
+@article{cox2024asynchronous,
+  title={Asynchronous byzantine federated learning},
+  author={Cox, Bart and M{\u{a}}lan, Abele and Chen, Lydia Y and Decouchant, J{\'e}r{\'e}mie},
+  journal={arXiv preprint arXiv:2406.01438},
+  year={2024}
+}
+```
