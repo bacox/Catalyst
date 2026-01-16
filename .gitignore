@@ -15,7 +15,8 @@ graph.png
 graphs/*
 wandb
 tmp/*
-
+venv37
+venv38
 # C extensions
 *.so
 

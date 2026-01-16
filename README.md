@@ -8,23 +8,38 @@ It supports multiple algorithms and is designed for easy extensibility and repro
 
 ---
 
-## Submodules
+## Getting Started
+The code is tested on Ubuntu 24.04 with Python 3.8
 
-The `data-processing` submodule is **optional** and only needed for dataset preparation. 
-It is **not required** to run asynchronous training simulations.
+### Installation
 
-### Clone with Submodules
-
+Setup a virtual environment
 ```bash
-git clone --recursive git:/<repo-url>.git
+python38 -m venv venv38
+source venv38/bin/activate
 ```
+
+Install dependencies for GPU or CPU:
+Cuda:
+```bash
+pip install -r requirements_cuda117.txt
+```
+
+CPU:
+```bash
+pip install -r requirements.txt
+```
+
+
+### Submodules
+
+The `data-processing` submodule is *optional* and only needed for dataset preparation. It is *not required* to run asynchronous training simulations.
 
 To update and initialize submodules:
 
 ```bash
 git submodule update --init --recursive
 ```
-
 ---
 
 ## Project Overview
@@ -61,18 +76,6 @@ The goal is to compute the global average across all client updates while handli
 
 ---
 
-## Getting Started
-
-### Installation
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install .
-```
-
----
-
 ## Running Experiments
 
 To list all available experiments:
@@ -104,7 +107,13 @@ To follow live logging output:
 ```bash
 tail -f debug.log
 ```
-
+### Example
+```bash
+python -m asyncfl.exps.exp50_mnist
+python -m asyncfl.proc_exp exp50_mnist -t 750
+# Visualize results
+python -m asyncfl.proc_exp exp50_mnist -w
+```
 ---
 
 ## Reproducibility: Paper Results
